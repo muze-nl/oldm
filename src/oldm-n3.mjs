@@ -54,6 +54,10 @@ export const n3Writer = (source) => {
 			}
 			let preds = getPredicates(subject)
 			for (let pred of preds) {
+				if (pred.predicate.id=='id' || pred.predicate.id=='a') {
+					/* these are handled explicitly elsewhere */
+					continue
+				}
 				if (!Array.isArray(pred.object)) {
 					pred.object = [ pred.object ]
 				}
@@ -87,7 +91,7 @@ export const n3Writer = (source) => {
 				} else if (isLiteral(object)) {
 					pred.object = getLiteral(object)
 				} else {
-					console.log('weird object',object, predicate)
+					console.log('oldm-ns: encountered unknown object', object, predicate)
 				}
 				preds.push(pred)
 			})
@@ -95,11 +99,11 @@ export const n3Writer = (source) => {
 		}
 
 		const getLiteral = (object) => {
-			let type = source.getType(object) || null
+			let type = source.getType(object) || undefined
 			if (type) {
 				if (type == xsd+source.context.separator+'string' 
 					|| type == xsd+source.context.separator+'number') {
-					type = null
+					type = undefined
 				} else {
 					type = source.fullURI(type)
 				}
