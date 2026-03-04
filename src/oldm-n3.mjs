@@ -3,6 +3,7 @@ import n3 from 'n3'
 
 export const n3Parser = (input, uri, type) => {
 	const parser = new n3.Parser({
+        baseIRI: uri,
         blankNodePrefix: '',
         format: type
     })
