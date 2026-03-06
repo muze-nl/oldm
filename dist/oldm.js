@@ -1908,16 +1908,6 @@ var require_buffer = __commonJS({
   }
 });
 
-// node_modules/queue-microtask/index.js
-var require_queue_microtask = __commonJS({
-  "node_modules/queue-microtask/index.js"(exports, module) {
-    var promise;
-    module.exports = typeof queueMicrotask === "function" ? queueMicrotask.bind(typeof window !== "undefined" ? window : global) : (cb) => (promise || (promise = Promise.resolve())).then(cb).catch((err) => setTimeout(() => {
-      throw err;
-    }, 0));
-  }
-});
-
 // node_modules/readable-stream/lib/ours/primordials.js
 var require_primordials = __commonJS({
   "node_modules/readable-stream/lib/ours/primordials.js"(exports, module) {
@@ -8646,7 +8636,6 @@ __export(oldm_n3_exports, {
 
 // node_modules/n3/src/N3Lexer.js
 var import_buffer = __toESM(require_buffer());
-var import_queue_microtask = __toESM(require_queue_microtask());
 
 // node_modules/n3/src/IRIs.js
 var RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
@@ -8675,7 +8664,8 @@ var IRIs_default = {
     forAll: `${SWAP}reify#forAll`
   },
   log: {
-    implies: `${SWAP}log#implies`
+    implies: `${SWAP}log#implies`,
+    isImpliedBy: `${SWAP}log#isImpliedBy`
   }
 };
 
@@ -8745,6 +8735,7 @@ var N3Lexer = class {
     this._whitespace = /^[ \t]+/;
     this._endOfFile = /^(?:#[^\n\r]*)?$/;
     options = options || {};
+    this._isImpliedBy = options.isImpliedBy;
     if (this._lineMode = !!options.lineMode) {
       this._n3Mode = false;
       for (const key in this) {
@@ -8812,8 +8803,13 @@ var N3Lexer = class {
             type = "IRI";
           } else if (input.length > 1 && input[1] === "<")
             type = "<<", matchLength = 2;
-          else if (this._n3Mode && input.length > 1 && input[1] === "=")
-            type = "inverse", matchLength = 2, value = ">";
+          else if (this._n3Mode && input.length > 1 && input[1] === "=") {
+            matchLength = 2;
+            if (this._isImpliedBy)
+              type = "abbreviation", value = "<";
+            else
+              type = "inverse", value = ">";
+          }
           break;
         case ">":
           if (input.length > 1 && input[1] === ">")
@@ -9053,7 +9049,7 @@ var N3Lexer = class {
     if (typeof input === "string") {
       this._input = this._readStartingBom(input);
       if (typeof callback === "function")
-        (0, import_queue_microtask.default)(() => this._tokenizeToEnd(callback, true));
+        queueMicrotask(() => this._tokenizeToEnd(callback, true));
       else {
         const tokens = [];
         let error;
@@ -9405,13 +9401,14 @@ var N3Parser = class {
     if (!(this._supportsNamedGraphs = !(isTurtle || isN3)))
       this._readPredicateOrNamedGraph = this._readPredicate;
     this._supportsQuads = !(isTurtle || isTriG || isNTriples || isN3);
+    this._isImpliedBy = options.isImpliedBy;
     this._supportsRDFStar = format === "" || /star|\*$/.test(format);
     if (isLineMode)
       this._resolveRelativeIRI = (iri) => {
         return null;
       };
     this._blankNodePrefix = typeof options.blankNodePrefix !== "string" ? "" : options.blankNodePrefix.replace(/^(?!_:)/, "_:");
-    this._lexer = options.lexer || new N3Lexer({ lineMode: isLineMode, n3: isN3 });
+    this._lexer = options.lexer || new N3Lexer({ lineMode: isLineMode, n3: isN3, isImpliedBy: this._isImpliedBy });
     this._explicitQuantifiers = !!options.explicitQuantifiers;
   }
   // ## Static class methods
@@ -10288,7 +10285,8 @@ function initDataFactory(parser, factory) {
   parser.ABBREVIATIONS = {
     "a": factory.namedNode(IRIs_default.rdf.type),
     "=": factory.namedNode(IRIs_default.owl.sameAs),
-    ">": factory.namedNode(IRIs_default.log.implies)
+    ">": factory.namedNode(IRIs_default.log.implies),
+    "<": factory.namedNode(IRIs_default.log.isImpliedBy)
   };
   parser.QUANTIFIERS_GRAPH = factory.namedNode("urn:n3:quantifiers");
 }
@@ -10302,6 +10300,7 @@ __export(N3Util_exports, {
   isDefaultGraph: () => isDefaultGraph,
   isLiteral: () => isLiteral,
   isNamedNode: () => isNamedNode,
+  isQuad: () => isQuad,
   isVariable: () => isVariable,
   prefix: () => prefix,
   prefixes: () => prefixes2
@@ -10317,6 +10316,9 @@ function isLiteral(term) {
 }
 function isVariable(term) {
   return !!term && term.termType === "Variable";
+}
+function isQuad(term) {
+  return !!term && term.termType === "Quad";
 }
 function isDefaultGraph(term) {
   return !!term && term.termType === "DefaultGraph";
@@ -10345,6 +10347,83 @@ function prefixes2(defaultPrefixes, factory) {
   }
   return processPrefix;
 }
+
+// node_modules/n3/src/Util.js
+function escapeRegex(regex) {
+  return regex.replace(/[\]\/\(\)\*\+\?\.\\\$]/g, "\\$&");
+}
+
+// node_modules/n3/src/BaseIRI.js
+var BASE_UNSUPPORTED = /^:?[^:?#]*(?:[?#]|$)|^file:|^[^:]*:\/*[^?#]+?\/(?:\.\.?(?:\/|$)|\/)/i;
+var SUFFIX_SUPPORTED = /^(?:(?:[^/?#]{3,}|\.?[^/?#.]\.?)(?:\/[^/?#]{3,}|\.?[^/?#.]\.?)*\/?)?(?:[?#]|$)/;
+var CURRENT = "./";
+var PARENT = "../";
+var QUERY = "?";
+var FRAGMENT = "#";
+var BaseIRI = class _BaseIRI {
+  constructor(base) {
+    this.base = base;
+    this._baseLength = 0;
+    this._baseMatcher = null;
+    this._pathReplacements = new Array(base.length + 1);
+  }
+  static supports(base) {
+    return !BASE_UNSUPPORTED.test(base);
+  }
+  _getBaseMatcher() {
+    if (this._baseMatcher)
+      return this._baseMatcher;
+    if (!_BaseIRI.supports(this.base))
+      return this._baseMatcher = /.^/;
+    const scheme = /^[^:]*:\/*/.exec(this.base)[0];
+    const regexHead = ["^", escapeRegex(scheme)];
+    const regexTail = [];
+    const segments = [], segmenter = /[^/?#]*([/?#])/y;
+    let segment, query = 0, fragment = 0, last = segmenter.lastIndex = scheme.length;
+    while (!query && !fragment && (segment = segmenter.exec(this.base))) {
+      if (segment[1] === FRAGMENT)
+        fragment = segmenter.lastIndex - 1;
+      else {
+        regexHead.push(escapeRegex(segment[0]), "(?:");
+        regexTail.push(")?");
+        if (segment[1] !== QUERY)
+          segments.push(last = segmenter.lastIndex);
+        else {
+          query = last = segmenter.lastIndex;
+          fragment = this.base.indexOf(FRAGMENT, query);
+          this._pathReplacements[query] = QUERY;
+        }
+      }
+    }
+    for (let i = 0; i < segments.length; i++)
+      this._pathReplacements[segments[i]] = PARENT.repeat(segments.length - i - 1);
+    this._pathReplacements[segments[segments.length - 1]] = CURRENT;
+    this._baseLength = fragment > 0 ? fragment : this.base.length;
+    regexHead.push(
+      escapeRegex(this.base.substring(last, this._baseLength)),
+      query ? "(?:#|$)" : "(?:[?#]|$)"
+    );
+    return this._baseMatcher = new RegExp([...regexHead, ...regexTail].join(""));
+  }
+  toRelative(iri) {
+    const match = this._getBaseMatcher().exec(iri);
+    if (!match)
+      return iri;
+    const length = match[0].length;
+    if (length === this._baseLength && length === iri.length)
+      return "";
+    const parentPath = this._pathReplacements[length];
+    if (parentPath) {
+      const suffix = iri.substring(length);
+      if (parentPath !== QUERY && !SUFFIX_SUPPORTED.test(suffix))
+        return iri;
+      if (parentPath === CURRENT && /^[^?#]/.test(suffix))
+        return suffix;
+      return parentPath + suffix;
+    }
+    return iri.substring(length - 1);
+  }
+};
 
 // node_modules/n3/src/N3Writer.js
 var DEFAULTGRAPH2 = N3DataFactory_default.defaultGraph();
@@ -10397,8 +10476,7 @@ var N3Writer = class {
       this._prefixIRIs = /* @__PURE__ */ Object.create(null);
       options.prefixes && this.addPrefixes(options.prefixes);
       if (options.baseIRI) {
-        this._baseMatcher = new RegExp(`^${escapeRegex(options.baseIRI)}${options.baseIRI.endsWith("/") ? "" : "[#?]"}`);
-        this._baseLength = options.baseIRI.length;
+        this._baseIri = new BaseIRI(options.baseIRI);
       }
     } else {
       this._lineMode = true;
@@ -10464,8 +10542,9 @@ var N3Writer = class {
       return "id" in entity ? entity.id : `_:${entity.value}`;
     }
     let iri = entity.value;
-    if (this._baseMatcher && this._baseMatcher.test(iri))
-      iri = iri.substr(this._baseLength);
+    if (this._baseIri) {
+      iri = this._baseIri.toRelative(iri);
+    }
     if (escape.test(iri))
       iri = iri.replace(escapeAll, characterReplacer);
     const prefixMatch = this._prefixRegex.exec(iri);
@@ -10647,9 +10726,6 @@ function characterReplacer(character) {
   }
   return result2;
 }
-function escapeRegex(regex) {
-  return regex.replace(/[\]\/\(\)\*\+\?\.\\\$]/g, "\\$&");
-}
 
 // node_modules/n3/src/N3Store.js
 var import_readable_stream = __toESM(require_browser3());
@@ -10750,7 +10826,7 @@ var N3Store = class _N3Store {
   constructor(quads, options) {
     this._size = 0;
     this._graphs = /* @__PURE__ */ Object.create(null);
-    if (!options && quads && !quads[0])
+    if (!options && quads && !quads[0] && !(typeof quads.match === "function"))
       options = quads, quads = null;
     options = options || {};
     this._factory = options.factory || N3DataFactory_default;
@@ -10760,7 +10836,7 @@ var N3Store = class _N3Store {
     this._termToNumericId = this._entityIndex._termToNumericId.bind(this._entityIndex);
     this._termToNewNumericId = this._entityIndex._termToNewNumericId.bind(this._entityIndex);
     if (quads)
-      this.addQuads(quads);
+      this.addAll(quads);
   }
   // ## Public properties
   // ### `size` returns the number of quads in the store
@@ -11133,7 +11209,7 @@ var N3Store = class _N3Store {
   // Setting any field to `undefined` or `null` indicates a wildcard.
   some(callback, subject, predicate, object, graph) {
     for (const quad2 of this.readQuads(subject, predicate, object, graph))
-      if (callback(quad2))
+      if (callback(quad2, this))
         return true;
     return false;
   }
@@ -11560,23 +11636,25 @@ var DatasetCoreAndReadableStream = class _DatasetCoreAndReadableStream extends i
         return newStore;
       const graphs = n3Store._getGraphs(graph);
       for (const graphKey in graphs) {
-        let subjects, predicates, objects;
-        if (!subjectId && predicateId) {
-          if (predicates = indexMatch(graphs[graphKey].predicates, [predicateId, objectId, subjectId])) {
-            subjects = indexMatch(graphs[graphKey].subjects, [subjectId, predicateId, objectId]);
-            objects = indexMatch(graphs[graphKey].objects, [objectId, subjectId, predicateId]);
+        let subjects, predicates, objects, content;
+        if (content = graphs[graphKey]) {
+          if (!subjectId && predicateId) {
+            if (predicates = indexMatch(content.predicates, [predicateId, objectId, subjectId])) {
+              subjects = indexMatch(content.subjects, [subjectId, predicateId, objectId]);
+              objects = indexMatch(content.objects, [objectId, subjectId, predicateId]);
+            }
+          } else if (objectId) {
+            if (objects = indexMatch(content.objects, [objectId, subjectId, predicateId])) {
+              subjects = indexMatch(content.subjects, [subjectId, predicateId, objectId]);
+              predicates = indexMatch(content.predicates, [predicateId, objectId, subjectId]);
+            }
+          } else if (subjects = indexMatch(content.subjects, [subjectId, predicateId, objectId])) {
+            predicates = indexMatch(content.predicates, [predicateId, objectId, subjectId]);
+            objects = indexMatch(content.objects, [objectId, subjectId, predicateId]);
           }
-        } else if (objectId) {
-          if (objects = indexMatch(graphs[graphKey].objects, [objectId, subjectId, predicateId])) {
-            subjects = indexMatch(graphs[graphKey].subjects, [subjectId, predicateId, objectId]);
-            predicates = indexMatch(graphs[graphKey].predicates, [predicateId, objectId, subjectId]);
-          }
-        } else if (subjects = indexMatch(graphs[graphKey].subjects, [subjectId, predicateId, objectId])) {
-          predicates = indexMatch(graphs[graphKey].predicates, [predicateId, objectId, subjectId]);
-          objects = indexMatch(graphs[graphKey].objects, [objectId, subjectId, predicateId]);
+          if (subjects)
+            newStore._graphs[graphKey] = { subjects, predicates, objects };
         }
-        if (subjects)
-          newStore._graphs[graphKey] = { subjects, predicates, objects };
       }
       newStore._size = null;
     }
@@ -11969,6 +12047,7 @@ var src_default = {
   StreamWriter: N3StreamWriter,
   Util: N3Util_exports,
   Reasoner: N3Reasoner,
+  BaseIRI,
   DataFactory: N3DataFactory_default,
   Term,
   NamedNode: NamedNode2,
@@ -11985,6 +12064,7 @@ var src_default = {
 // src/oldm-n3.mjs
 var n3Parser = (input, uri, type) => {
   const parser = new src_default.Parser({
+    baseIRI: uri,
     blankNodePrefix: "",
     format: type
   });
@@ -12156,9 +12236,6 @@ buffer/index.js:
    * @author   Feross Aboukhadijeh <https://feross.org>
    * @license  MIT
    *)
-
-queue-microtask/index.js:
-  (*! queue-microtask. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
 
 safe-buffer/index.js:
   (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
