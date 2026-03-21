@@ -78,3 +78,29 @@ let coll = new Collection()
 coll.push("A string")
 ```
 
+## One or Many
+
+Linked Data does not differentiate between one or more values for a predicate. In javascript you use either an Array for multiple values (or a Map, Set, etc.) or you use a single value string, number, object, etc. So on the javascript side of OLDM, you need to be able to specify what you want. OLDM provides two simple functions to help with that: `one()` and `many()`:
+
+```javascript
+import {one} from '@muze-nl/oldm'
+
+const birthday = one(profile.vcard$bday)
+const names = many(profile.vcard$fn)
+```
+
+## First non-empty value
+
+Another issue is that there may be a number of different possible predicates that can describe the information you want. Or you may want to provide a default value in case none of those is present. OLDM provides the `first()` function for that:
+
+```javascript
+import {first} from '@muze-nl/oldm'
+
+const name = first(profile.vcard$fn, profile.schema$givenName, 'John Doe')
+```
+
+The first value that is not null, undefined will be returned. If you want to make sure that any empty values will also be replaced with your default value, use this instead:
+
+```
+const name = first(profile.vcard$fn, profile.schema$givenName) ?? 'John Doe'
+```

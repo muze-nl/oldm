@@ -11,6 +11,44 @@ export const prefixes = {
     vcard: 'http://www.w3.org/2006/vcard/ns#'
 }
 
+export function one(values, whichOne='last')
+{
+	let result = values
+	if (Array.isArray(values)) {
+		if (whichOne=='last') {
+			result = values[values.length-1]
+		} else if (whichOne=='first') {
+			result = values[0]
+		} else if (typeof whichOne=='function') {
+			result = whichOne(values)			
+		} else {
+			throw new Error('Unknown value for whichOne parameter')
+		}
+	}
+	return result
+}
+
+export function many(values)
+{
+	if (Array.isArray(values)) {
+		return values
+	}
+	if (values == null) {
+		return []
+	}
+	return [values]
+}
+
+export function first(...values)
+{
+	for (const value of values) {
+		if (value!==null && value!==undefined) {
+			return value
+		}
+	}
+	return null
+}
+
 export class Context {
 	constructor(options) {
 		this.prefixes = {...prefixes, ...options?.prefixes}

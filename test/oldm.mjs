@@ -1,5 +1,5 @@
 import tap from 'tap'
-import oldm, {Graph} from '../src/oldm.mjs'
+import oldm, {Graph, one, many, first} from '../src/oldm.mjs'
 import {n3Parser, n3Writer} from '../src/oldm-n3.mjs'
 
 tap.test('rdf uris', t => {
@@ -200,5 +200,53 @@ tap.test('collections', async t => {
 
 	t.same(output, expectTurtle)
 
+	t.end()
+})
+
+tap.test('one', t => {
+	const result = one(['a','b','c'])
+	const firstOne = one(['a','b','c'], 'first')
+	const middleOne = one(['a','b','c'], a => a[1])
+	t.same(result, 'c')
+	t.same(firstOne, 'a')
+	t.same(middleOne, 'b')
+	t.end()
+})
+
+tap.test('many', t => {
+	const nop = many(['a','b'])
+	const result = many('a')
+	const empty = many(null)
+	t.same(nop, ['a','b'])
+	t.same(result, ['a'])
+	t.same(empty, [])
+	t.end()
+})
+
+tap.test('first', t => {
+	let turtle = `
+@prefix : <#>.
+@prefix schema: <http://schema.org/>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+
+:me 
+	a schema:Person;
+	vcard:bday "1972-09-20"^^xsd:date;
+ 	vcard:fn "Auke van Slooten" .`
+
+	const context = oldm({
+		prefixes: {
+			'schema':'http://schema.org/',
+			'vcard':'http://www.w3.org/2006/vcard/ns#'
+		},
+		parser: n3Parser,
+		writer: n3Writer
+	})
+
+	let source = context.parse(turtle, 'https://auke.solidcommunity.net/profile/card#me', 'text/turtle')
+	let primary = source.primary
+	const name = first(primary.schema$givenName, primary.vcard$fn, 'John Doe')
+	t.same(''+name, 'Auke van Slooten')
 	t.end()
 })
