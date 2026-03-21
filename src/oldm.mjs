@@ -11,6 +11,44 @@ export const prefixes = {
     vcard: 'http://www.w3.org/2006/vcard/ns#'
 }
 
+export function one(values, whichOne='last')
+{
+	let result = values
+	if (Array.isArray(values)) {
+		if (whichOne=='last') {
+			result = values[values.length-1]
+		} else if (whichOne=='first') {
+			result = values[0]
+		} else if (typeof whichOne=='function') {
+			result = whichOne(values)			
+		} else {
+			throw new Error('Unknown value for whichOne parameter')
+		}
+	}
+	return result
+}
+
+export function many(values)
+{
+	if (Array.isArray(values)) {
+		return values
+	}
+	if (values == null) {
+		return []
+	}
+	return [values]
+}
+
+export function first(...values)
+{
+	for (const value of values) {
+		if (value!==null && value!==undefined) {
+			return value
+		}
+	}
+	return null
+}
+
 export class Context {
 	constructor(options) {
 		this.prefixes = {...prefixes, ...options?.prefixes}
@@ -29,7 +67,7 @@ export class Context {
 		if (prefixes) {
 			for (let prefix in prefixes) {
 				let prefixURL = prefixes[prefix]
-				if (prefixURL.match(/^http(s?)\:\/\/$/i)) {
+				if (prefixURL.match(/^http(s?):\/\/$/i)) {
 					prefixURL += url.substring(prefixURL.length)
 				} else try {
 					prefixURL = new URL(prefixes[prefix], url).href
@@ -83,22 +121,21 @@ export class Graph {
 			let subject
 			if (quad.subject.termType=='BlankNode') {
 				let shortPred = this.shortURI(quad.predicate.id,':')
+				let shortObj
 				switch(shortPred) {
 					case 'rdf:first':
 						subject = this.addCollection(quad.subject.id)
-						let shortObj = this.shortURI(quad.object.id, ':')
+						shortObj = this.shortURI(quad.object.id, ':')
 						if (shortObj!='rdf:nil') {
 							const value = this.getValue(quad.object)
 							if (value) {
 								subject.push(value)
 							}
 						}
-						continue
-					break
+					continue
 					case 'rdf:rest':
 						this.#blankNodes[quad.object.id] = this.#blankNodes[quad.subject.id]
-						continue
-					break
+					continue
 					default:
 						subject = this.addBlankNode(quad.subject.id)
 					break
@@ -278,14 +315,10 @@ export class BlankNode {
 export class NamedNode extends BlankNode {
 	constructor(id, graph) {
 		super(graph)
-		Object.defineProperty(this, 'a', {
-			writable: true,
-			enumerable: false
-		})
 		Object.defineProperty(this, 'id', {
 			value: id,
 			writable: false,
-			enumerable: false
+			enumerable: true
 		})
 	}
 }
