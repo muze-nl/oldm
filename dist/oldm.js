@@ -12258,6 +12258,7 @@
   // src/oldm-n3.mjs
   var n3Parser = (input, uri, type) => {
     const parser = new src_default.Parser({
+      baseIRI: uri,
       blankNodePrefix: "",
       format: type
     });

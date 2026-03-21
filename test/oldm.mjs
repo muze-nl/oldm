@@ -132,7 +132,7 @@ tap.test('write changes', async t => {
 	vcard:bday "1972-09-20"^^xsd:date;
  	vcard:fn "Auke van Slooten" .`
 
-	let expectTurtle = `@prefix : <#>.
+	let expectTurtle = `@prefix : <https://auke.solidcommunity.net/profile/card#>.
 @prefix schema: <http://schema.org/>.
 @prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
@@ -173,7 +173,7 @@ tap.test('collections', async t => {
 	vcard:bday "1972-09-20"^^xsd:date;
  	vcard:fn ( "Auke van Slooten" "Auke Cornelis van Slooten" ).`
 
-	let expectTurtle = `@prefix : <#>.
+	let expectTurtle = `@prefix : <https://auke.solidcommunity.net/profile/card#>.
 @prefix schema: <http://schema.org/>.
 @prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
