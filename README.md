@@ -1,4 +1,4 @@
-[![GitHub License](https://img.shields.io/github/license/muze-nl/metro)](https://github.com/muze-nl/oldm/blob/main/LICENSE)
+[![GitHub License](https://img.shields.io/github/license/muze-nl/oldm)](https://github.com/muze-nl/oldm/blob/main/LICENSE)
 [![GitHub package.json version](https://img.shields.io/github/package-json/v/muze-nl/oldm)]()
 [![NPM Version](https://img.shields.io/npm/v/@muze-nl/oldm)](https://www.npmjs.com/package/@muze-nl/oldm)
 [![npm bundle size](https://img.shields.io/bundlephobia/min/@muze-nl/oldm)](https://www.npmjs.com/package/@muze-nl/oldm)
@@ -55,9 +55,8 @@ Be aware that `JSON.stringify` can easily fail if the linked data has circular r
 1. [Introduction](#introduction)
 2. [Usage](#usage)
 3. [Gotchas](#gotchas)
-4. [Documentation](docs/) - See also [metro.muze.nl](https://metro.muze.nl/)
-5. [Contributions](CONTRIBUTING.md)
-6. [License](#license)
+4. [Contributions](CONTRIBUTING.md)
+5. [License](#license)
 
 <a name="introduction"></a>
 ## Introduction
