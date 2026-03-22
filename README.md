@@ -194,7 +194,7 @@ const name = first(profile.vcard$fn, profile.schema$givenName, 'John Doe')
 The first value that is not null, undefined will be returned. If you want to make sure that any empty values will also be replaced with your default value, use this instead:
 
 ```
-const name = first(profile.vcard$fn, profile.schema$givenName) ?? 'John Doe'
+const name = first(profile.vcard$fn, profile.schema$givenName) || 'John Doe'
 ```
 
 <a name="license"></a>
