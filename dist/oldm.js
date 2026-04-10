@@ -1159,24 +1159,24 @@
       Buffer3.prototype.readBigUInt64LE = defineBigIntMethod(function readBigUInt64LE(offset) {
         offset = offset >>> 0;
         validateNumber(offset, "offset");
-        const first = this[offset];
+        const first2 = this[offset];
         const last = this[offset + 7];
-        if (first === void 0 || last === void 0) {
+        if (first2 === void 0 || last === void 0) {
           boundsError(offset, this.length - 8);
         }
-        const lo = first + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24;
+        const lo = first2 + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24;
         const hi = this[++offset] + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + last * 2 ** 24;
         return BigInt(lo) + (BigInt(hi) << BigInt(32));
       });
       Buffer3.prototype.readBigUInt64BE = defineBigIntMethod(function readBigUInt64BE(offset) {
         offset = offset >>> 0;
         validateNumber(offset, "offset");
-        const first = this[offset];
+        const first2 = this[offset];
         const last = this[offset + 7];
-        if (first === void 0 || last === void 0) {
+        if (first2 === void 0 || last === void 0) {
           boundsError(offset, this.length - 8);
         }
-        const hi = first * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
+        const hi = first2 * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
         const lo = this[++offset] * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + last;
         return (BigInt(hi) << BigInt(32)) + BigInt(lo);
       });
@@ -1249,23 +1249,23 @@
       Buffer3.prototype.readBigInt64LE = defineBigIntMethod(function readBigInt64LE(offset) {
         offset = offset >>> 0;
         validateNumber(offset, "offset");
-        const first = this[offset];
+        const first2 = this[offset];
         const last = this[offset + 7];
-        if (first === void 0 || last === void 0) {
+        if (first2 === void 0 || last === void 0) {
           boundsError(offset, this.length - 8);
         }
         const val = this[offset + 4] + this[offset + 5] * 2 ** 8 + this[offset + 6] * 2 ** 16 + (last << 24);
-        return (BigInt(val) << BigInt(32)) + BigInt(first + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24);
+        return (BigInt(val) << BigInt(32)) + BigInt(first2 + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24);
       });
       Buffer3.prototype.readBigInt64BE = defineBigIntMethod(function readBigInt64BE(offset) {
         offset = offset >>> 0;
         validateNumber(offset, "offset");
-        const first = this[offset];
+        const first2 = this[offset];
         const last = this[offset + 7];
-        if (first === void 0 || last === void 0) {
+        if (first2 === void 0 || last === void 0) {
           boundsError(offset, this.length - 8);
         }
-        const val = (first << 24) + // Overflow
+        const val = (first2 << 24) + // Overflow
         this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
         return (BigInt(val) << BigInt(32)) + BigInt(this[++offset] * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + last);
       });
@@ -8354,6 +8354,20 @@
   });
 
   // src/oldm.mjs
+  var oldm_exports = {};
+  __export(oldm_exports, {
+    BlankNode: () => BlankNode,
+    Collection: () => Collection,
+    Context: () => Context,
+    Graph: () => Graph,
+    NamedNode: () => NamedNode,
+    default: () => oldm,
+    first: () => first,
+    many: () => many,
+    one: () => one,
+    prefixes: () => prefixes,
+    rdfType: () => rdfType
+  });
   function oldm(options) {
     return new Context(options);
   }
@@ -8364,6 +8378,38 @@
     schema: "http://schema.org/",
     vcard: "http://www.w3.org/2006/vcard/ns#"
   };
+  function one(values, whichOne = "last") {
+    let result2 = values;
+    if (Array.isArray(values)) {
+      if (whichOne == "last") {
+        result2 = values[values.length - 1];
+      } else if (whichOne == "first") {
+        result2 = values[0];
+      } else if (typeof whichOne == "function") {
+        result2 = whichOne(values);
+      } else {
+        throw new Error("Unknown value for whichOne parameter");
+      }
+    }
+    return result2;
+  }
+  function many(values) {
+    if (Array.isArray(values)) {
+      return values;
+    }
+    if (values == null) {
+      return [];
+    }
+    return [values];
+  }
+  function first(...values) {
+    for (const value of values) {
+      if (value !== null && value !== void 0) {
+        return value;
+      }
+    }
+    return null;
+  }
   var Context = class {
     constructor(options) {
       this.prefixes = { ...prefixes, ...options?.prefixes };
@@ -9173,9 +9219,8 @@
     // ### The direction of this literal
     get direction() {
       const id = this.id;
-      const endPos = id.lastIndexOf('"');
-      const dirPos = id.lastIndexOf("--");
-      return dirPos > endPos && dirPos + 2 < id.length ? id.substr(dirPos + 2).toLowerCase() : "";
+      const atPos = id.lastIndexOf("--") + 2;
+      return atPos > 1 && atPos < id.length ? id.substr(atPos).toLowerCase() : "";
     }
     // ### The datatype IRI of this literal
     get datatype() {
@@ -9918,8 +9963,8 @@
           token = null;
           break;
         case "langcode":
-          if (token.value.split("-").some((t) => t.length > 8))
-            return this._error("Detected language tag with subtag longer than 8 characters", token);
+          if (token.value.length > 8)
+            return this._error("Detected language tag of length larger than 8", token);
           literal2 = this._factory.literal(this._literalValue, token.value);
           this._literalLanguage = token.value;
           token = null;
@@ -11543,7 +11588,7 @@
         while (current && !malformed) {
           const objectQuads = this.getQuads(null, null, current, null);
           const subjectQuads = this.getQuads(current, null, null, null);
-          let quad2, first = null, rest = null, parent = null;
+          let quad2, first2 = null, rest = null, parent = null;
           for (let i = 0; i < subjectQuads.length && !malformed; i++) {
             quad2 = subjectQuads[i];
             if (!quad2.graph.equals(graph))
@@ -11551,10 +11596,10 @@
             else if (head)
               malformed = onError(current, "has non-list arcs out");
             else if (quad2.predicate.value === IRIs_default.rdf.first) {
-              if (first)
+              if (first2)
                 malformed = onError(current, "has multiple rdf:first arcs");
               else
-                toRemove.push(first = quad2);
+                toRemove.push(first2 = quad2);
             } else if (quad2.predicate.value === IRIs_default.rdf.rest) {
               if (rest)
                 malformed = onError(current, "has multiple rdf:rest arcs");
@@ -11581,10 +11626,10 @@
               headPos = "object";
             }
           }
-          if (!first)
+          if (!first2)
             malformed = onError(current, "has no list head");
           else
-            items.unshift(first.object);
+            items.unshift(first2.object);
           current = parent && parent.subject;
         }
         if (malformed)
@@ -12414,6 +12459,7 @@
   // src/index.mjs
   var oldm2 = {
     context: oldm,
+    ...oldm_exports,
     ...oldm_n3_exports
   };
   globalThis.oldm = oldm2;
