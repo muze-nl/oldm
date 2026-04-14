@@ -1,14 +1,29 @@
-export default function oldm(options) {
+export default function oldm(options)
+{
 	return new Context(options)
 }
 
 export const rdfType = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
 
 export const prefixes = {
-	rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-	solid: 'http://www.w3.org/ns/solid/terms#',
+	acl:    'http://www.w3.org/ns/auth/acl#',
+	acp:    'http://www.w3.org/ns/solid/acp#',
+	dcterms:'http://purl.org/dc/terms/',
+	foaf:   'http://xmlns.com/foaf/0.1/',
+	ldn:    'https://www.w3.org/ns/ldn#',
+	ldp:    'http://www.w3.org/ns/ldp#',
+	notify: 'http://www.w3.org/ns/solid/notifications#',
+	oidc:   'http://www.w3.org/ns/solid/oidc#',
+	owl:    'http://www.w3.org/2002/07/owl#',
+	pim:    'http://www.w3.org/ns/pim/space#',
+	rdf:    'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+	rdfs:   'http://www.w3.org/2000/01/rdf-schema#',
 	schema: 'http://schema.org/',
-    vcard: 'http://www.w3.org/2006/vcard/ns#'
+	solid:  'http://www.w3.org/ns/solid/terms#',
+	stat:   'http://www.w3.org/ns/posix/stat#',
+	turtle: 'http://www.w3.org/ns/iana/media-types/text/turtle#',
+	vcard:  'http://www.w3.org/2006/vcard/ns#',
+	xsd:    'http://www.w3.org/2001/XMLSchema#'
 }
 
 export function one(values, whichOne='last')
@@ -50,7 +65,8 @@ export function first(...values)
 }
 
 export class Context {
-	constructor(options) {
+	constructor(options)
+	{
 		this.prefixes = {...prefixes, ...options?.prefixes}
 		if (!this.prefixes['xsd']) {
 			this.prefixes['xsd'] = 'http://www.w3.org/2001/XMLSchema#'
@@ -62,7 +78,8 @@ export class Context {
 		this.separator = options?.separator ?? '$'
 	}
 
-	parse(input, url, type) {
+	parse(input, url, type)
+	{
 		const {quads, prefixes} = this.parser(input, url, type)
 		if (prefixes) {
 			for (let prefix in prefixes) {
@@ -84,7 +101,8 @@ export class Context {
 		return this.sources[url]
 	}
 
-	setType(literal, shortType) {
+	setType(literal, shortType)
+	{
 		if (!shortType) {
 			return literal
 		}
@@ -100,7 +118,8 @@ export class Context {
 		return literal
 	}
 
-	getType(literal) {
+	getType(literal)
+	{
 		if (literal && typeof literal == 'object') {
 			return literal.type
 		}
@@ -108,10 +127,12 @@ export class Context {
 	}
 }
 
-export class Graph {
+export class Graph
+{
 	#blankNodes = Object.create(null)
 
-	constructor(quads, url, mimetype, prefixes, context) {
+	constructor(quads, url, mimetype, prefixes, context)
+	{
 		this.mimetype = mimetype
 		this.url      = url
 		this.prefixes = prefixes
@@ -157,7 +178,8 @@ export class Graph {
 		})
 	}
 
-	addNamedNode(uri) {
+	addNamedNode(uri)
+	{
 		// make sure any relative uri subject ids are fully qualified
 		let absURI = new URL(uri, this.url).href
 		if (!this.subjects[absURI]) {
@@ -166,29 +188,34 @@ export class Graph {
 		return this.subjects[absURI]
 	}
 
-	addBlankNode(id) {
+	addBlankNode(id)
+	{
 		if (!this.#blankNodes[id]) {
 			this.#blankNodes[id] = new BlankNode(this)
 		}
 		return this.#blankNodes[id]
 	}
 
-	addCollection(id) {
+	addCollection(id)
+	{
 		if (!this.#blankNodes[id]) {
 			this.#blankNodes[id] = new Collection(this)
 		}
 		return this.#blankNodes[id]
 	}
 
-	write() {
+	write()
+	{
 		return this.context.writer(this)
 	}
 
-	get(shortID) {
+	get(shortID)
+	{
 		return this.subjects[this.fullURI(shortID)]
 	}
 
-	fullURI(shortURI, separator=null) {
+	fullURI(shortURI, separator=null)
+	{
 		if (!separator) {
 			separator = this.context.separator
 		}
@@ -199,7 +226,8 @@ export class Graph {
 		return shortURI
 	}
 
-	shortURI(fullURI, separator=null) {
+	shortURI(fullURI, separator=null)
+	{
 		if (!separator) {
 			separator = this.context.separator
 		}
@@ -217,7 +245,8 @@ export class Graph {
 	/**
 	 * This sets the type of a literal, usually one of the xsd types
 	 */
-	setType(literal, type) {
+	setType(literal, type)
+	{
 		const shortType = this.shortURI(type)
 		return this.context.setType(literal, shortType)
 	}
@@ -225,11 +254,13 @@ export class Graph {
 	/**
 	 * This returns the type of a literal, or null
 	 */
-	getType(literal) {
+	getType(literal)
+	{
 		return this.context.getType(literal)
 	}
 
-	setLanguage(literal, language) {
+	setLanguage(literal, language)
+	{
 		if (typeof literal == 'string') {
 			literal = new String(literal)
 		} else if (typeof result == 'number') {
@@ -242,7 +273,8 @@ export class Graph {
 		return literal
 	}
 
-	getValue(object) {
+	getValue(object)
+	{
 		let result
 		if (object.termType=='Literal') {
 			result = object.value
@@ -265,9 +297,11 @@ export class Graph {
 
 }
 
-export class BlankNode {
+export class BlankNode
+{
 
-	constructor(graph) {
+	constructor(graph)
+	{
 		Object.defineProperty(this, 'graph', {
 			value: graph,
 			writable: false,
@@ -275,7 +309,8 @@ export class BlankNode {
 		})
 	}
 
-	addPredicate(predicate, object) {
+	addPredicate(predicate, object)
+	{
 		if (predicate.id) {
 			predicate = predicate.id
 		}
@@ -300,7 +335,8 @@ export class BlankNode {
 	 * Subjects can have more than one type (or class), unlike literals
 	 * The type value can be any URI, xsdTypes are unexpected here
 	 */
-	addType(type) {
+	addType(type)
+	{
 		if (!this.a) {
 			this.a = type
 		} else {
@@ -312,8 +348,10 @@ export class BlankNode {
 	}
 }
 
-export class NamedNode extends BlankNode {
-	constructor(id, graph) {
+export class NamedNode extends BlankNode
+{
+	constructor(id, graph)
+	{
 		super(graph)
 		Object.defineProperty(this, 'id', {
 			value: id,
@@ -323,9 +361,10 @@ export class NamedNode extends BlankNode {
 	}
 }
 
-export class Collection extends Array {
-
-	constructor(id, graph) {
+export class Collection extends Array
+{
+	constructor(id, graph)
+	{
 		super()
 		Object.defineProperty(this, 'graph', {
 			value: graph,
@@ -333,5 +372,4 @@ export class Collection extends Array {
 			enumerable: false
 		})
 	}
-
 }
