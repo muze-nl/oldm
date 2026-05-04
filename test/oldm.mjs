@@ -34,6 +34,34 @@ tap.test('get graph', t => {
 	t.end()
 })
 
+tap.test('references', t => {
+	let turtle = `
+@prefix : <#>.
+@prefix schema: <http://schema.org/>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+@prefix foaf: <http://xmlns.com/foaf/0.1/>.
+
+:me 
+	a schema:Person;
+	vcard:fn "Auke van Slooten";
+	foaf:knows <#him> .
+
+:him
+	a schema:Person;
+	vcard:fn "Ben Peachey";
+	foaf:knows <#me> .
+`
+	const context = oldm({
+		parser: n3Parser
+	})
+	let source = context.parse(turtle, 'https://auke.solidcommunity.net/profile/card#me', 'text/turtle')
+	t.same(''+source.primary.vcard$fn, 'Auke van Slooten')
+	t.same(source.primary, source.data[0])
+	t.same(source.primary.foaf$knows, source.data[1])
+	t.same(source.primary.foaf$knows.foaf$knows, source.primary)
+	t.end()
+})
+
 // tap.test('two graphs merging', t => {
 // 	let turtle = `
 // @prefix : <#>.
