@@ -110,3 +110,8 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 ## Review cadence
 
 Review this document before feature work, before releases, and whenever the public API or dependency surface changes. Close issues by changing their status to `Done` and leaving a short note about the decision.
+
+
+## Experimental Turtle adapter
+
+The repository now contains `@muze-labs/oldm-turtle`, an experimental non-streaming Turtle 1.1 parser/writer adapter. It is a better long-term fit for Muze principles than the broad N3 dependency, but it is not the default yet. The current investigation shows a substantial browser bundle reduction if it replaces N3, while small Solid-style parse/write performance is roughly comparable. See `docs/TURTLE_PARSER_INVESTIGATION.md`.

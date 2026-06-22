@@ -468,6 +468,16 @@ Use a mix of:
 - real Solid profile/contact preference documents;
 - round-trip tests through OLDM’s public object model.
 
+### Status
+
+Started as `@muze-labs/oldm-turtle` in `packages/oldm-turtle`. The first experiment supports the common Turtle 1.1 features used by small Solid-style documents and includes a comparison script:
+
+```sh
+npm run compare:turtle
+```
+
+See `docs/TURTLE_PARSER_INVESTIGATION.md` for current size and benchmark results. The package should remain experimental until it has broader conformance tests and real-world Solid fixtures.
+
 ## 12. Document the object ↔ RDF mapping contract
 
 ### Problem

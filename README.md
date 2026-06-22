@@ -164,3 +164,8 @@ console.log(source.primary.vcard$fn)
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+
+## Turtle parser investigation
+
+An experimental small Turtle 1.1 parser/writer adapter lives in `packages/oldm-turtle` as `@muze-labs/oldm-turtle`. It is not the default yet; see `docs/TURTLE_PARSER_INVESTIGATION.md` for supported syntax, size comparison, and small Solid-style benchmark results.
