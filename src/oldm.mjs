@@ -67,8 +67,8 @@ export function first(...values)
 export class Context {
 	constructor(options)
 	{
-		this.prefixes = {...prefixes, ...options?.prefixes}
-		if (!this.prefixes['xsd']) {
+		this.prefixes = {...prefixes, ...options?.prefixes} //FIXME: don't add the same url with different prefixes
+		if (!this.prefixes['xsd']) { //FIXME: don't assume the xsd url always has the 'xsd' prefix
 			this.prefixes['xsd'] = 'http://www.w3.org/2001/XMLSchema#'
 		}
 		this.parser = options?.parser
