@@ -667,3 +667,92 @@ tap.test('context write helpers can use a configured default graph', t => {
 
 	t.end()
 })
+
+tap.test('direct assignment on the combined context view uses source-aware defaults', t => {
+	const documentUrl = 'https://example.org/profile/card'
+	const subjectUrl = `${documentUrl}#me`
+	const dataUrl = 'https://example.org/data.ttl'
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1
+					? []
+					: [quad(namedNode(subjectUrl), namedNode(`${schema}knowsAbout`), literal('web'))],
+				prefixes: {schema, vcard, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard}
+	})
+	const profile = context.parse('', documentUrl, 'text/turtle')
+	const data = context.parse('', dataUrl, 'text/turtle')
+	const combined = context.get(subjectUrl)
+
+	combined.vcard$fn = 'Auke'
+	combined.schema$knowsAbout = ['solid', 'linked data']
+
+	t.equal(String(profile.get(subjectUrl).vcard$fn), 'Auke')
+	t.same(profile.get(subjectUrl).schema$knowsAbout.map(value => String(value)), ['solid', 'linked data'])
+	t.equal(data.get(subjectUrl).vcard$fn, undefined)
+	t.equal(String(data.get(subjectUrl).schema$knowsAbout), 'web')
+	t.same(context.sources(subjectUrl, 'vcard$fn', 'Auke'), [profile])
+	t.same(context.sources(subjectUrl, 'schema$knowsAbout', 'solid'), [profile])
+	t.same(context.sources(subjectUrl, 'schema$knowsAbout', 'web'), [data])
+	t.same(combined.schema$knowsAbout.map(value => String(value)), ['solid', 'linked data', 'web'])
+
+	t.end()
+})
+
+tap.test('direct delete on the combined context view uses source-aware defaults', t => {
+	const documentUrl = 'https://example.org/profile/card'
+	const subjectUrl = `${documentUrl}#me`
+	const context = oldm({
+		parser: parserFor([
+			quad(namedNode(subjectUrl), namedNode(`${vcard}fn`), literal('Auke')),
+			quad(namedNode(subjectUrl), namedNode(`${schema}knowsAbout`), literal('web'))
+		]),
+		prefixes: {schema, vcard}
+	})
+	const profile = context.parse('', documentUrl, 'text/turtle')
+	const combined = context.get(subjectUrl)
+
+	delete combined.vcard$fn
+
+	t.equal(profile.get(subjectUrl).vcard$fn, undefined)
+	t.equal(combined.vcard$fn, undefined)
+	t.same(context.sources(subjectUrl, 'vcard$fn'), [])
+	t.equal(String(context.get(subjectUrl).schema$knowsAbout), 'web')
+
+	t.end()
+})
+
+tap.test('direct assignment on the combined context view rejects ambiguous graphs', t => {
+	const subjectUrl = 'https://example.org/id#me'
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: [quad(namedNode(subjectUrl), namedNode(`${vcard}fn`), literal(call == 1 ? 'One' : 'Two'))],
+				prefixes: {vcard, rdf, xsd}
+			}
+		},
+		prefixes: {vcard}
+	})
+	const first = context.parse('', 'https://example.org/one.ttl', 'text/turtle')
+	const second = context.parse('', 'https://example.org/two.ttl', 'text/turtle')
+	const combined = context.get(subjectUrl)
+
+	t.throws(() => {
+		combined.vcard$fn = 'Ambiguous'
+	}, /Cannot choose a source graph/)
+	t.same(first.get(subjectUrl).vcard$fn.toString(), 'One')
+	t.same(second.get(subjectUrl).vcard$fn.toString(), 'Two')
+	t.throws(() => {
+		combined.id = 'https://example.org/changed#me'
+	}, TypeError)
+	t.equal(combined.id, subjectUrl)
+
+	t.end()
+})

@@ -67,7 +67,7 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Status:** Partly addressed
 
-**Note:** `Context` now keeps a registry of parsed graphs, exposes a combined read view, provides `context.sources(subject, predicate, value)` for provenance inspection, and supports source-aware write helpers through `graph.set/add/delete()` and `context.set/add/delete(..., { graph })`. Direct property assignment on the merged `context.get(...)` object is still intentionally not treated as a source-aware write; that remains a possible future improvement.
+**Note:** `Context` now keeps a registry of parsed graphs, exposes a combined read view, provides `context.sources(subject, predicate, value)` for provenance inspection, supports source-aware write helpers through `graph.set/add/delete()` and `context.set/add/delete(..., { graph })`, and routes direct property assignment on named subjects from `context.get(...)` through the same conservative graph resolver. Blank nodes remain graph-scoped and collection mutation is still intentionally conservative.
 
 ### 3. Separate core graph/object mapping from parser/writer adapters
 

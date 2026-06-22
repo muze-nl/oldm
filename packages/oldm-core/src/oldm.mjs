@@ -179,6 +179,8 @@ function isLiteral(value)
 }
 
 export class Context {
+	#buildingSubjects = false
+
 	constructor(options)
 	{
 		this.prefixes = {...prefixes, ...options?.prefixes} //FIXME: don't add the same url with different prefixes
@@ -263,7 +265,11 @@ export class Context {
 
 	delete(subject, predicate=null, value=undefined, options={})
 	{
-		return this.resolveGraph(subject, options).delete(subject, predicate, value)
+		const graph = this.resolveGraph(subject, options)
+		if (arguments.length < 3) {
+			return graph.delete(subject, predicate)
+		}
+		return graph.delete(subject, predicate, value)
 	}
 
 	resolveGraph(subject, options={})
@@ -417,18 +423,23 @@ export class Context {
 	{
 		const subjects = Object.create(null)
 
-		for (const graph of this.graphs) {
-			for (const id of Object.keys(graph.subjects)) {
-				if (!subjects[id]) {
-					subjects[id] = new NamedNode(id, this)
+		this.#buildingSubjects = true
+		try {
+			for (const graph of this.graphs) {
+				for (const id of Object.keys(graph.subjects)) {
+					if (!subjects[id]) {
+						subjects[id] = this.contextSubject(new NamedNode(id, this))
+					}
 				}
 			}
-		}
 
-		for (const graph of this.graphs) {
-			for (const [id, subject] of Object.entries(graph.subjects)) {
-				this.mergeSubject(subjects[id], subject, subjects)
+			for (const graph of this.graphs) {
+				for (const [id, subject] of Object.entries(graph.subjects)) {
+					this.mergeSubject(subjects[id], subject, subjects)
+				}
 			}
+		} finally {
+			this.#buildingSubjects = false
 		}
 
 		return subjects
@@ -444,6 +455,42 @@ export class Context {
 				target[predicate],
 				resolveValue(value, subjects, this)
 			)
+		}
+	}
+
+	contextSubject(subject)
+	{
+		const context = this
+		return new Proxy(subject, {
+			set(target, property, value, receiver) {
+				if (context.#buildingSubjects || typeof property == 'symbol' || property == 'id' || property == 'graph') {
+					return Reflect.set(target, property, value, receiver)
+				}
+
+				context.set(target.id, property, value)
+				context.updateContextProperty(target, property)
+				return true
+			},
+
+			deleteProperty(target, property) {
+				if (context.#buildingSubjects || typeof property == 'symbol' || property == 'id' || property == 'graph') {
+					return Reflect.deleteProperty(target, property)
+				}
+
+				context.delete(target.id, property)
+				context.updateContextProperty(target, property)
+				return true
+			}
+		})
+	}
+
+	updateContextProperty(target, property)
+	{
+		const updated = this.get(target.id)
+		if (updated && property in updated) {
+			target[property] = updated[property]
+		} else {
+			delete target[property]
 		}
 	}
 
