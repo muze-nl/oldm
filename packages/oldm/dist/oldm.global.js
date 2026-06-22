@@ -2079,6 +2079,7 @@
       this.writer = options?.writer;
       this.graphs = [];
       this.graphsByUrl = /* @__PURE__ */ Object.create(null);
+      this.defaultGraph = options?.defaultGraph ?? null;
       this.separator = options?.separator ?? "$";
       Object.defineProperty(this, "subjects", {
         get() {
@@ -2129,6 +2130,70 @@
     }
     graph(url) {
       return this.graphsByUrl[this.fullURI(url)];
+    }
+    set(subject, predicate, value, options = {}) {
+      return this.resolveGraph(subject, options).set(subject, predicate, value);
+    }
+    add(subject, predicate, value, options = {}) {
+      return this.resolveGraph(subject, options).add(subject, predicate, value);
+    }
+    delete(subject, predicate = null, value = void 0, options = {}) {
+      return this.resolveGraph(subject, options).delete(subject, predicate, value);
+    }
+    resolveGraph(subject, options = {}) {
+      if (options.graph) {
+        return this.getGraphOption(options.graph);
+      }
+      if (subject instanceof BlankNode && subject.graph instanceof Graph) {
+        return subject.graph;
+      }
+      const id = this.subjectID(subject);
+      if (id) {
+        const exactGraph = this.graphsByUrl[id];
+        if (exactGraph) {
+          return exactGraph;
+        }
+        const documentGraph = this.graphsByUrl[this.documentURL(id)];
+        if (documentGraph) {
+          return documentGraph;
+        }
+        const subjectSources = this.graphs.filter((graph) => graph.subjects[id]);
+        if (subjectSources.length == 1) {
+          return subjectSources[0];
+        }
+        if (subjectSources.length > 1) {
+          throw new Error(`Cannot choose a source graph for ${id}. Use context.set/add/delete(..., { graph }) or graph.set/add/delete(...) to choose one explicitly.`);
+        }
+      }
+      if (this.defaultGraph) {
+        return this.getGraphOption(this.defaultGraph);
+      }
+      if (this.graphs.length == 1) {
+        return this.graphs[0];
+      }
+      throw new Error("Cannot choose a source graph. Use context.set/add/delete(..., { graph }) or graph.set/add/delete(...) to choose one explicitly.");
+    }
+    getGraphOption(graph) {
+      if (graph instanceof Graph) {
+        if (!this.graphs.includes(graph)) {
+          throw new Error("The selected graph is not part of this context");
+        }
+        return graph;
+      }
+      const resolved = this.graph(graph);
+      if (!resolved) {
+        throw new Error(`Unknown graph: ${graph}`);
+      }
+      return resolved;
+    }
+    documentURL(id) {
+      try {
+        const url = new URL(id);
+        url.hash = "";
+        return url.href;
+      } catch (err) {
+        return id;
+      }
     }
     sources(subject, predicate = null, value = void 0) {
       if (!subject) {
@@ -2331,6 +2396,128 @@
     }
     get(shortID) {
       return this.subjects[this.fullURI(shortID)];
+    }
+    set(subject, predicate, value) {
+      const node = this.ensureSubject(subject);
+      const property = this.context.propertyName(predicate);
+      if (property == "a") {
+        node.a = this.normalizeTypeValues(value);
+      } else {
+        node[property] = this.normalizeValues(value);
+      }
+      return node;
+    }
+    add(subject, predicate, value) {
+      const node = this.ensureSubject(subject);
+      const property = this.context.propertyName(predicate);
+      const newValue = property == "a" ? this.normalizeTypeValues(value) : this.normalizeValues(value);
+      node[property] = mergeValue(node[property], newValue);
+      return node;
+    }
+    delete(subject, predicate = null, value = void 0) {
+      const node = this.findSubject(subject);
+      if (!node) {
+        return false;
+      }
+      if (!predicate) {
+        if (node.id) {
+          delete this.subjects[node.id];
+          if (this.primary === node) {
+            this.primary = null;
+          }
+        }
+        return true;
+      }
+      const property = this.context.propertyName(predicate);
+      if (!(property in node)) {
+        return false;
+      }
+      if (arguments.length < 3) {
+        delete node[property];
+        return true;
+      }
+      const deleteValues = property == "a" ? values(this.normalizeTypeValues(value)) : values(this.normalizeValues(value));
+      const remaining = values(node[property]).filter((item) => !deleteValues.some((deleteValue) => sameValue(item, deleteValue)));
+      if (remaining.length == values(node[property]).length) {
+        return false;
+      }
+      if (remaining.length == 0) {
+        delete node[property];
+      } else if (remaining.length == 1) {
+        node[property] = remaining[0];
+      } else {
+        node[property] = remaining;
+      }
+      return true;
+    }
+    ensureSubject(subject) {
+      if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
+        if (subject.graph !== this) {
+          throw new Error("Cannot write a blank node into a different graph");
+        }
+        return subject;
+      }
+      if (subject instanceof NamedNode) {
+        return this.addNamedNode(subject.id);
+      }
+      return this.addNamedNode(this.fullURI(subject));
+    }
+    findSubject(subject) {
+      if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
+        return subject.graph === this ? subject : null;
+      }
+      const id = subject?.id ? subject.id : this.fullURI(subject);
+      return this.subjects[id];
+    }
+    normalizeValues(value) {
+      if (Array.isArray(value) && !(value instanceof Collection)) {
+        return value.map((item) => this.normalizeValue(item));
+      }
+      return this.normalizeValue(value);
+    }
+    normalizeValue(value) {
+      if (value instanceof Collection) {
+        const collection = new Collection(this);
+        for (const item of value) {
+          collection.push(this.normalizeValue(item));
+        }
+        return collection;
+      }
+      if (value instanceof NamedNode) {
+        return this.addNamedNode(value.id);
+      }
+      if (value instanceof BlankNode) {
+        if (value.graph !== this) {
+          throw new Error("Cannot write a blank node into a different graph");
+        }
+        return value;
+      }
+      if (this.looksLikeURI(value)) {
+        return this.addNamedNode(this.fullURI(value));
+      }
+      return value;
+    }
+    normalizeTypeValues(value) {
+      if (Array.isArray(value) && !(value instanceof Collection)) {
+        return value.map((item) => this.normalizeTypeValue(item));
+      }
+      return this.normalizeTypeValue(value);
+    }
+    normalizeTypeValue(value) {
+      if (value instanceof NamedNode) {
+        return this.shortURI(value.id);
+      }
+      return this.shortURI(this.fullURI(value));
+    }
+    looksLikeURI(value) {
+      if (typeof value != "string") {
+        return false;
+      }
+      if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
+        return true;
+      }
+      const [prefix, path] = value.split(this.context.separator);
+      return Boolean(path && this.context.prefixes[prefix]);
     }
     fullURI(shortURI, separator = null) {
       if (!separator) {

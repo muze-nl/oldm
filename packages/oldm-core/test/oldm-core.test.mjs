@@ -488,3 +488,182 @@ tap.test('context reports source graphs for graph-scoped blank nodes and collect
 
 	t.end()
 })
+
+tap.test('graph set, add and delete update only that graph', t => {
+	const source = contextFor([]).parse('', url, 'text/turtle')
+	const friendUrl = 'https://example.org/profile/card#friend'
+
+	const subject = source.set(url, 'vcard$fn', 'Auke')
+	t.equal(subject, source.get(url))
+	t.equal(String(source.get(url).vcard$fn), 'Auke')
+
+	source.add(url, 'schema$knowsAbout', 'web')
+	source.add(url, 'schema$knowsAbout', 'solid')
+	source.add(url, 'schema$knowsAbout', 'solid')
+	t.same(source.get(url).schema$knowsAbout.map(value => String(value)), ['web', 'solid'])
+
+	source.add(url, 'foaf$knows', friendUrl)
+	t.ok(source.get(url).foaf$knows instanceof NamedNode)
+	t.equal(source.get(url).foaf$knows.id, friendUrl)
+
+	source.set(url, 'a', [`${schema}Person`, `${foaf}Person`])
+	t.same(source.get(url).a, ['schema$Person', 'foaf$Person'])
+
+	t.equal(source.delete(url, 'schema$knowsAbout', 'web'), true)
+	t.equal(String(source.get(url).schema$knowsAbout), 'solid')
+	t.equal(source.delete(url, 'schema$knowsAbout', 'missing'), false)
+	t.equal(source.delete(url, 'schema$knowsAbout'), true)
+	t.equal(source.get(url).schema$knowsAbout, undefined)
+	t.equal(source.delete(url), true)
+	t.equal(source.get(url), undefined)
+
+	t.end()
+})
+
+tap.test('context set, add and delete can target an explicit graph', t => {
+	const profileUrl = 'https://example.org/profile/card#me'
+	const prefsUrl = 'https://example.org/profile/prefs#me'
+	const me = namedNode(profileUrl)
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1
+					? [quad(me, namedNode(`${vcard}fn`), literal('Auke'))]
+					: [quad(me, namedNode(`${solid}oidcIssuer`), namedNode('https://issuer.example/'))],
+				prefixes: {schema, vcard, solid, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard, solid}
+	})
+	const profile = context.parse('', profileUrl, 'text/turtle')
+	const prefs = context.parse('', prefsUrl, 'text/turtle')
+
+	context.set(profileUrl, 'vcard$fn', 'Private name', {graph: prefs})
+	context.add(profileUrl, 'schema$knowsAbout', 'solid', {graph: prefsUrl})
+
+	t.equal(String(profile.get(profileUrl).vcard$fn), 'Auke')
+	t.equal(String(prefs.get(profileUrl).vcard$fn), 'Private name')
+	t.same(context.sources(profileUrl, 'vcard$fn', 'Auke'), [profile])
+	t.same(context.sources(profileUrl, 'vcard$fn', 'Private name'), [prefs])
+	t.same(context.sources(profileUrl, 'schema$knowsAbout', 'solid'), [prefs])
+
+	t.equal(context.delete(profileUrl, 'vcard$fn', 'Private name', {graph: prefs}), true)
+	t.equal(prefs.get(profileUrl).vcard$fn, undefined)
+	t.equal(String(context.get(profileUrl).vcard$fn), 'Auke')
+	t.throws(() => context.set(profileUrl, 'vcard$fn', 'Name', {graph: 'https://unknown.example/'}), /Unknown graph/)
+	t.throws(() => context.set(profileUrl, 'vcard$fn', 'Name', {graph: contextFor([]).parse('', 'https://other.example/#graph', 'text/turtle')}), /not part of this context/)
+
+	t.end()
+})
+
+tap.test('context write helpers choose sensible default graphs', t => {
+	const documentUrl = 'https://example.org/profile/card'
+	const subjectUrl = `${documentUrl}#me`
+	const dataUrl = 'https://example.org/data.ttl'
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1
+					? []
+					: [quad(namedNode(subjectUrl), namedNode(`${schema}knowsAbout`), literal('web'))],
+				prefixes: {schema, vcard, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard}
+	})
+	const profile = context.parse('', documentUrl, 'text/turtle')
+	const data = context.parse('', dataUrl, 'text/turtle')
+
+	context.set(subjectUrl, 'vcard$fn', 'Auke')
+	t.equal(String(profile.get(subjectUrl).vcard$fn), 'Auke')
+	t.equal(data.get(subjectUrl).vcard$fn, undefined)
+
+	context.add('https://example.org/other#thing', 'schema$name', 'Explicit graph', {graph: data})
+	t.equal(String(data.get('https://example.org/other#thing').schema$name), 'Explicit graph')
+
+	const singleContext = oldm({
+		parser: parserFor([]),
+		prefixes: {schema}
+	})
+	const onlyGraph = singleContext.parse('', 'https://example.org/only.ttl', 'text/turtle')
+	singleContext.add('https://example.org/only#thing', 'schema$name', 'Only graph')
+	t.equal(String(onlyGraph.get('https://example.org/only#thing').schema$name), 'Only graph')
+
+	const graphSubject = data.get(subjectUrl)
+	context.add(graphSubject, 'schema$knowsAbout', 'solid')
+	t.same(data.get(subjectUrl).schema$knowsAbout.map(value => String(value)), ['web', 'solid'])
+
+	t.end()
+})
+
+tap.test('context write helpers reject ambiguous default graphs', t => {
+	const subjectUrl = 'https://example.org/id#me'
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: [quad(namedNode(subjectUrl), namedNode(`${vcard}fn`), literal(call == 1 ? 'One' : 'Two'))],
+				prefixes: {vcard, rdf, xsd}
+			}
+		},
+		prefixes: {vcard}
+	})
+	context.parse('', 'https://example.org/one.ttl', 'text/turtle')
+	context.parse('', 'https://example.org/two.ttl', 'text/turtle')
+
+	t.throws(() => context.set(subjectUrl, 'vcard$fn', 'Ambiguous'), /Cannot choose a source graph/)
+	t.throws(() => context.add(subjectUrl, 'vcard$fn', 'Ambiguous'), /Cannot choose a source graph/)
+	t.throws(() => context.delete(subjectUrl, 'vcard$fn', 'One'), /Cannot choose a source graph/)
+
+	t.end()
+})
+
+tap.test('graph write helpers accept existing OLDM value objects', t => {
+	const source = contextFor([]).parse('', url, 'text/turtle')
+	const other = contextFor([]).parse('', 'https://example.org/other#graph', 'text/turtle')
+	const friend = source.addNamedNode('https://example.org/profile/card#friend')
+	const email = source.addBlankNode('email')
+	const otherEmail = other.addBlankNode('email')
+	const topics = new Collection(source)
+	topics.push('web')
+	topics.push(friend)
+
+	email.vcard$value = source.addNamedNode('mailto:auke@example.org')
+	source.add(url, 'foaf$knows', friend)
+	source.add(url, 'vcard$hasEmail', email)
+	source.add(url, 'schema$knowsAbout', topics)
+	source.set(url, 'schema$rating', 5)
+	source.set(url, 'a', source.addNamedNode(`${schema}Person`))
+
+	t.equal(source.get(url).foaf$knows, friend)
+	t.equal(source.get(url).vcard$hasEmail, email)
+	t.ok(source.get(url).schema$knowsAbout instanceof Collection)
+	t.same(source.get(url).schema$knowsAbout.map(value => value.id ?? String(value)), ['web', friend.id])
+	t.equal(source.get(url).schema$rating, 5)
+	t.equal(source.get(url).a, 'schema$Person')
+	t.throws(() => source.add(url, 'vcard$hasEmail', otherEmail), /different graph/)
+	t.throws(() => source.set(otherEmail, 'vcard$value', 'mailto:wrong@example.org'), /different graph/)
+
+	t.end()
+})
+
+tap.test('context write helpers can use a configured default graph', t => {
+	const context = oldm({
+		parser: parserFor([]),
+		prefixes: {schema}
+	})
+	const firstGraph = context.parse('', 'https://example.org/first.ttl', 'text/turtle')
+	context.parse('', 'https://example.org/second.ttl', 'text/turtle')
+	context.defaultGraph = firstGraph
+
+	context.set('https://example.org/unknown#subject', 'schema$name', 'Default graph')
+
+	t.equal(String(firstGraph.get('https://example.org/unknown#subject').schema$name), 'Default graph')
+
+	t.end()
+})

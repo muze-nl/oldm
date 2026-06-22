@@ -25,7 +25,7 @@ const context = oldm({
 
 ## Multiple graphs in one context
 
-A context now keeps a registry of every parsed graph. Each `context.parse()` call still returns a `Graph` for the parsed resource, while the context exposes a combined read view over all graphs loaded into that context.
+A context keeps a registry of every parsed graph. Each `context.parse()` call still returns a `Graph` for the parsed resource, while the context exposes a combined view over all graphs loaded into that context.
 
 ```javascript
 const context = oldm.context()
@@ -45,7 +45,24 @@ context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
 // [profile] when only the profile graph contains that property
 ```
 
-The combined view merges named subjects by IRI and keeps the original graph views separate. `context.sources(subject, predicate, value)` can be used to inspect which graph contributed a subject, property, or specific property value. Write routing is intentionally left for a later step.
+The combined view merges named subjects by IRI and keeps the original graph views separate. `context.sources(subject, predicate, value)` can be used to inspect which graph contributed a subject, property, or specific property value.
+
+For source-aware writes, use the graph-specific helpers when you know the resource you want to edit:
+
+```javascript
+profile.set(`${profileUrl}#me`, 'vcard$fn', 'Auke')
+profile.add(`${profileUrl}#me`, 'schema$knowsAbout', 'Linked Data')
+profile.delete(`${profileUrl}#me`, 'schema$knowsAbout', 'Old value')
+```
+
+Or use context-level helpers with an explicit graph:
+
+```javascript
+context.set(`${profileUrl}#me`, 'vcard$fn', 'Auke', { graph: profile })
+context.add(`${profileUrl}#me`, 'schema$knowsAbout', 'Solid', { graph: profileUrl })
+```
+
+When no graph is passed, `context.set/add/delete()` uses a conservative default: the subject's exact graph URL, the subject document URL without a fragment, the only graph that currently contains the subject, the configured `defaultGraph`, or the only graph in the context. If there is no obvious source graph, OLDM throws and asks you to choose one explicitly. Direct property assignment on `context.get(...)` remains a merged read-view operation and should not be used for source-aware writes yet.
 
 ## Browser bundles
 
