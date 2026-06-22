@@ -22,10 +22,24 @@ const context = oldm({
 })
 ```
 
-## Browser bundle
+## Browser bundles
+
+The friendly package provides both a modern ESM bundle and a classic global IIFE bundle.
+
+For modern module scripts:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@muze-nl/oldm/dist/oldm.min.js"></script>
+<script type="module">
+  import oldm from 'https://cdn.jsdelivr.net/npm/@muze-nl/oldm/dist/oldm.min.js'
+
+  const context = oldm.context()
+</script>
+```
+
+For a classic script tag that creates `globalThis.oldm`:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@muze-nl/oldm/dist/oldm.global.min.js"></script>
 <script>
   const context = oldm.context()
 </script>

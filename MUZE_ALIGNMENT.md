@@ -53,7 +53,7 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Status:** Partly addressed
 
-**Note:** The package is now split so `@muze-nl/oldm-core` has no direct N3 dependency and the N3 integration lives in `@muze-nl/oldm-n3`. The beginner package still uses N3 by default, so a fully import-map-compatible Turtle adapter remains a future improvement.
+**Note:** The package is now split so `@muze-nl/oldm-core` has no direct N3 dependency and the N3 integration lives in `@muze-nl/oldm-n3`. The beginner package now publishes both ESM bundles and a classic global IIFE bundle, so plain script-tag usage is supported again. The beginner package still uses N3 by default, so a fully import-map-compatible Turtle adapter remains a future improvement.
 
 ### 2. Document semantic tradeoffs of object mapping
 
