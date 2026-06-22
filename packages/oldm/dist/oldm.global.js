@@ -1948,37 +1948,92 @@
     vcard: "http://www.w3.org/2006/vcard/ns#",
     xsd: "http://www.w3.org/2001/XMLSchema#"
   };
-  function one(values, whichOne = "last") {
-    let result = values;
-    if (Array.isArray(values)) {
+  function one(values2, whichOne = "last") {
+    let result = values2;
+    if (Array.isArray(values2)) {
       if (whichOne == "last") {
-        result = values[values.length - 1];
+        result = values2[values2.length - 1];
       } else if (whichOne == "first") {
-        result = values[0];
+        result = values2[0];
       } else if (typeof whichOne == "function") {
-        result = whichOne(values);
+        result = whichOne(values2);
       } else {
         throw new Error("Unknown value for whichOne parameter");
       }
     }
     return result;
   }
-  function many(values) {
-    if (Array.isArray(values)) {
-      return values;
+  function many(values2) {
+    if (Array.isArray(values2)) {
+      return values2;
     }
-    if (values == null) {
+    if (values2 == null) {
       return [];
     }
-    return [values];
+    return [values2];
   }
-  function first(...values) {
-    for (const value of values) {
+  function first(...values2) {
+    for (const value of values2) {
       if (value !== null && value !== void 0) {
         return value;
       }
     }
     return null;
+  }
+  function values(value) {
+    if (Array.isArray(value) && !(value instanceof Collection)) {
+      return value;
+    }
+    if (value === void 0) {
+      return [];
+    }
+    return [value];
+  }
+  function mergeValue(existing, value) {
+    const result = values(existing);
+    for (const item of values(value)) {
+      if (!result.some((existingItem) => sameValue(existingItem, item))) {
+        result.push(item);
+      }
+    }
+    if (result.length == 0) {
+      return void 0;
+    }
+    if (result.length == 1) {
+      return result[0];
+    }
+    return result;
+  }
+  function sameValue(left, right) {
+    if (left === right) {
+      return true;
+    }
+    if (left instanceof NamedNode && right instanceof NamedNode) {
+      return left.id == right.id;
+    }
+    if (isLiteral(left) && isLiteral(right)) {
+      return String(left) == String(right) && left?.type == right?.type && left?.language == right?.language;
+    }
+    return false;
+  }
+  function resolveValue(value, subjects, context) {
+    if (value instanceof Collection) {
+      const collection = new Collection(context);
+      for (const item of value) {
+        collection.push(resolveValue(item, subjects, context));
+      }
+      return collection;
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => resolveValue(item, subjects, context));
+    }
+    if (value instanceof NamedNode && subjects[value.id]) {
+      return subjects[value.id];
+    }
+    return value;
+  }
+  function isLiteral(value) {
+    return value instanceof String || value instanceof Number || typeof value == "boolean" || typeof value == "string" || typeof value == "number";
   }
   var Context = class {
     constructor(options) {
@@ -1989,7 +2044,18 @@
       this.parser = options?.parser;
       this.writer = options?.writer;
       this.sources = /* @__PURE__ */ Object.create(null);
+      this.graphs = [];
       this.separator = options?.separator ?? "$";
+      Object.defineProperty(this, "subjects", {
+        get() {
+          return this.getSubjects();
+        }
+      });
+      Object.defineProperty(this, "data", {
+        get() {
+          return Object.values(this.subjects);
+        }
+      });
     }
     parse(input, url, type) {
       const { quads, prefixes: prefixes2 } = this.parser(input, url, type);
@@ -2009,8 +2075,74 @@
           }
         }
       }
-      this.sources[url] = new Graph(quads, url, type, prefixes2, this);
-      return this.sources[url];
+      return this.addGraph(new Graph(quads, url, type, prefixes2, this));
+    }
+    addGraph(graph) {
+      if (!graph?.url) {
+        throw new Error("Cannot add graph without a url");
+      }
+      const existing = this.sources[graph.url];
+      if (existing) {
+        const index = this.graphs.indexOf(existing);
+        if (index >= 0) {
+          this.graphs[index] = graph;
+        }
+      } else {
+        this.graphs.push(graph);
+      }
+      this.sources[graph.url] = graph;
+      return graph;
+    }
+    get(shortID) {
+      return this.subjects[this.fullURI(shortID)];
+    }
+    getSubjects() {
+      const subjects = /* @__PURE__ */ Object.create(null);
+      for (const graph of this.graphs) {
+        for (const id of Object.keys(graph.subjects)) {
+          if (!subjects[id]) {
+            subjects[id] = new NamedNode(id, this);
+          }
+        }
+      }
+      for (const graph of this.graphs) {
+        for (const [id, subject] of Object.entries(graph.subjects)) {
+          this.mergeSubject(subjects[id], subject, subjects);
+        }
+      }
+      return subjects;
+    }
+    mergeSubject(target, source, subjects) {
+      for (const [predicate, value] of Object.entries(source)) {
+        if (predicate == "id") {
+          continue;
+        }
+        target[predicate] = mergeValue(
+          target[predicate],
+          resolveValue(value, subjects, this)
+        );
+      }
+    }
+    fullURI(shortURI, separator = null) {
+      if (!separator) {
+        separator = this.separator;
+      }
+      const [prefix, path] = shortURI.split(separator);
+      if (path && this.prefixes[prefix]) {
+        return this.prefixes[prefix] + path;
+      }
+      return shortURI;
+    }
+    shortURI(fullURI, separator = null) {
+      if (!separator) {
+        separator = this.separator;
+      }
+      for (let prefix in this.prefixes) {
+        if (fullURI.startsWith(this.prefixes[prefix])) {
+          return prefix + separator + fullURI.substring(this.prefixes[prefix].length);
+        }
+      }
+      return fullURI;
     }
     setType(literal2, shortType) {
       if (!shortType) {
@@ -4499,7 +4631,7 @@
             pred.object = namedNode2(object2.id);
           } else if (object2 instanceof BlankNode) {
             pred.object = getBlankNode(object2);
-          } else if (isLiteral(object2)) {
+          } else if (isLiteral2(object2)) {
             pred.object = getLiteral(object2);
           } else {
             console.log("oldm-ns: encountered unknown object", object2, predicate);
@@ -4530,13 +4662,13 @@
         }
         return literal2(object, type);
       };
-      const isLiteral = (value) => {
+      const isLiteral2 = (value) => {
         return value instanceof String || value instanceof Number || typeof value == "boolean" || typeof value == "string" || typeof value == "number";
       };
       const getCollection = (object) => {
         let list = [];
         for (let value of object) {
-          if (isLiteral(value)) {
+          if (isLiteral2(value)) {
             list.push(getLiteral(value));
           } else if (value.id) {
             list.push(namedNode2(value.id));
@@ -4552,7 +4684,7 @@
       const getArray = (object) => {
         let list = [];
         for (const o of object) {
-          if (isLiteral(o)) {
+          if (isLiteral2(o)) {
             list.push(getLiteral(o));
           } else if (o instanceof NamedNode) {
             list.push(namedNode2(o.id));

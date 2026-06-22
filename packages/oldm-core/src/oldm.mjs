@@ -64,6 +64,79 @@ export function first(...values)
 	return null
 }
 
+function values(value)
+{
+	if (Array.isArray(value) && !(value instanceof Collection)) {
+		return value
+	}
+	if (value === undefined) {
+		return []
+	}
+	return [value]
+}
+
+function mergeValue(existing, value)
+{
+	const result = values(existing)
+	for (const item of values(value)) {
+		if (!result.some(existingItem => sameValue(existingItem, item))) {
+			result.push(item)
+		}
+	}
+	if (result.length == 0) {
+		return undefined
+	}
+	if (result.length == 1) {
+		return result[0]
+	}
+	return result
+}
+
+function sameValue(left, right)
+{
+	if (left === right) {
+		return true
+	}
+	if (left instanceof NamedNode && right instanceof NamedNode) {
+		return left.id == right.id
+	}
+	if (isLiteral(left) && isLiteral(right)) {
+		return String(left) == String(right)
+			&& left?.type == right?.type
+			&& left?.language == right?.language
+	}
+	return false
+}
+
+function resolveValue(value, subjects, context)
+{
+	if (value instanceof Collection) {
+		const collection = new Collection(context)
+		for (const item of value) {
+			collection.push(resolveValue(item, subjects, context))
+		}
+		return collection
+	}
+	if (Array.isArray(value)) {
+		return value.map(item => resolveValue(item, subjects, context))
+	}
+	if (value instanceof NamedNode && subjects[value.id]) {
+		return subjects[value.id]
+	}
+	return value
+}
+
+function isLiteral(value)
+{
+	return (
+		value instanceof String
+		|| value instanceof Number
+		|| typeof value == 'boolean'
+		|| typeof value == 'string'
+		|| typeof value == 'number'
+	)
+}
+
 export class Context {
 	constructor(options)
 	{
@@ -74,8 +147,20 @@ export class Context {
 		this.parser = options?.parser
 		this.writer = options?.writer
 		this.sources = Object.create(null)
-//		this.subjects = Object.create(null) // or use a proxy here? should contain all subjects from all sources, merged, readonly
+		this.graphs = []
 		this.separator = options?.separator ?? '$'
+
+		Object.defineProperty(this, 'subjects', {
+			get() {
+				return this.getSubjects()
+			}
+		})
+
+		Object.defineProperty(this, 'data', {
+			get() {
+				return Object.values(this.subjects)
+			}
+		})
 	}
 
 	parse(input, url, type)
@@ -97,8 +182,90 @@ export class Context {
 				}
 			}
 		}
-		this.sources[url] = new Graph(quads, url, type, prefixes, this)
-		return this.sources[url]
+		return this.addGraph(new Graph(quads, url, type, prefixes, this))
+	}
+
+	addGraph(graph)
+	{
+		if (!graph?.url) {
+			throw new Error('Cannot add graph without a url')
+		}
+
+		const existing = this.sources[graph.url]
+		if (existing) {
+			const index = this.graphs.indexOf(existing)
+			if (index >= 0) {
+				this.graphs[index] = graph
+			}
+		} else {
+			this.graphs.push(graph)
+		}
+		this.sources[graph.url] = graph
+		return graph
+	}
+
+	get(shortID)
+	{
+		return this.subjects[this.fullURI(shortID)]
+	}
+
+	getSubjects()
+	{
+		const subjects = Object.create(null)
+
+		for (const graph of this.graphs) {
+			for (const id of Object.keys(graph.subjects)) {
+				if (!subjects[id]) {
+					subjects[id] = new NamedNode(id, this)
+				}
+			}
+		}
+
+		for (const graph of this.graphs) {
+			for (const [id, subject] of Object.entries(graph.subjects)) {
+				this.mergeSubject(subjects[id], subject, subjects)
+			}
+		}
+
+		return subjects
+	}
+
+	mergeSubject(target, source, subjects)
+	{
+		for (const [predicate, value] of Object.entries(source)) {
+			if (predicate == 'id') {
+				continue
+			}
+			target[predicate] = mergeValue(
+				target[predicate],
+				resolveValue(value, subjects, this)
+			)
+		}
+	}
+
+	fullURI(shortURI, separator=null)
+	{
+		if (!separator) {
+			separator = this.separator
+		}
+		const [prefix, path] = shortURI.split(separator)
+		if (path && this.prefixes[prefix]) {
+			return this.prefixes[prefix]+path 
+		}
+		return shortURI
+	}
+
+	shortURI(fullURI, separator=null)
+	{
+		if (!separator) {
+			separator = this.separator
+		}
+		for (let prefix in this.prefixes) {
+			if (fullURI.startsWith(this.prefixes[prefix])) {
+				return prefix + separator + fullURI.substring(this.prefixes[prefix].length)
+			}
+		}
+		return fullURI
 	}
 
 	setType(literal, shortType)

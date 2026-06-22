@@ -27,6 +27,7 @@ const schema = 'http://schema.org/'
 const vcard = 'http://www.w3.org/2006/vcard/ns#'
 const foaf = 'http://xmlns.com/foaf/0.1/'
 const xsd = 'http://www.w3.org/2001/XMLSchema#'
+const solid = 'http://www.w3.org/ns/solid/terms#'
 const rdf = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
 
 function parserFor(quads, extraPrefixes = {}) {
@@ -124,6 +125,8 @@ tap.test('parse exposes graph, primary, subjects, data, id and URI helpers', t =
 	t.equal(source.get(url), source.primary)
 	t.equal(source.fullURI('schema$Person'), `${schema}Person`)
 	t.equal(source.shortURI(`${schema}Person`), 'schema$Person')
+	t.equal(source.shortURI(`${url}/child`), '/child')
+	t.equal(source.shortURI('https://unknown.example/Thing'), 'https://unknown.example/Thing')
 	t.equal(source.primary.graph, source)
 	t.notOk(Object.keys(source.primary).includes('graph'))
 	t.throws(() => {
@@ -164,6 +167,7 @@ tap.test('parse resolves object references, blank nodes, collections, language a
 		quad(me, namedNode(rdfType), namedNode(`${foaf}Person`)),
 		quad(me, namedNode(`${vcard}fn`), literal('Auke')),
 		quad(me, namedNode(`${vcard}fn`), literal('Auke C.')),
+		quad(me, namedNode(`${vcard}fn`), literal('Auke C. van Slooten')),
 		quad(me, namedNode(`${schema}name`), literal('Auke', `${xsd}string`, 'nl')),
 		quad(me, namedNode(`${vcard}bday`), literal('1972-09-20', `${xsd}date`)),
 		quad(me, namedNode(`${foaf}knows`), him),
@@ -175,7 +179,7 @@ tap.test('parse resolves object references, blank nodes, collections, language a
 	const source = contextFor(quads).parse('', url, 'text/turtle')
 
 	t.same([...source.primary.a].sort(), ['foaf$Person', 'schema$Person'])
-	t.same(source.primary.vcard$fn.map(value => String(value)), ['Auke', 'Auke C.'])
+	t.same(source.primary.vcard$fn.map(value => String(value)), ['Auke', 'Auke C.', 'Auke C. van Slooten'])
 	t.equal(String(source.primary.schema$name), 'Auke')
 	t.equal(source.primary.schema$name.language, 'nl')
 	t.equal(String(source.primary.vcard$bday), '1972-09-20')
@@ -207,6 +211,10 @@ tap.test('custom separator changes shortened predicate and type names', t => {
 	t.equal(String(source.primary['vcard:fn']), 'Auke')
 	t.equal(source.fullURI('schema:Person'), `${schema}Person`)
 	t.equal(source.shortURI(`${schema}Person`), 'schema:Person')
+	t.equal(context.fullURI('vcard:fn'), `${vcard}fn`)
+	t.equal(context.fullURI('unknown:Thing'), 'unknown:Thing')
+	t.equal(context.shortURI(`${vcard}fn`), 'vcard:fn')
+	t.equal(context.shortURI('https://unknown.example/Thing'), 'https://unknown.example/Thing')
 
 	t.end()
 })
@@ -217,7 +225,9 @@ tap.test('literal metadata helpers set and read datatypes and languages', t => {
 	const count = source.setType(12, `${xsd}integer`)
 	const name = source.setLanguage('Auke', 'nl')
 	const numericName = source.setLanguage(42, 'en')
+	const plain = source.context.setType('plain')
 
+	t.equal(plain, 'plain')
 	t.equal(String(date), '1972-09-20')
 	t.equal(source.getType(date), 'xsd$date')
 	t.equal(Number(count), 12)
@@ -233,6 +243,20 @@ tap.test('literal metadata helpers set and read datatypes and languages', t => {
 	t.end()
 })
 
+
+tap.test('subjects can add predicates from RDF-like predicate objects', t => {
+	const source = contextFor([]).parse('', url, 'text/turtle')
+	const subject = source.addNamedNode(url)
+
+	subject.addPredicate(namedNode(`${vcard}fn`), literal('Auke'))
+	subject.addPredicate(namedNode(`${vcard}fn`), literal('Auke C.'))
+	subject.addPredicate(namedNode(`${vcard}fn`), literal('Auke C. van Slooten'))
+
+	t.same(subject.vcard$fn.map(value => String(value)), ['Auke', 'Auke C.', 'Auke C. van Slooten'])
+
+	t.end()
+})
+
 tap.test('write delegates to the configured public writer', async t => {
 	const me = namedNode(url)
 	const source = contextFor([
@@ -241,6 +265,124 @@ tap.test('write delegates to the configured public writer', async t => {
 
 	const output = await source.write()
 	t.equal(output, JSON.stringify([url]))
+
+	t.end()
+})
+
+tap.test('context registers parsed graphs and exposes a combined read view', t => {
+	const profileUrl = 'https://example.org/profile/card#me'
+	const settingsUrl = 'https://example.org/settings/private#prefs'
+	const me = namedNode(profileUrl)
+	const settings = namedNode(settingsUrl)
+	const quads = [
+		quad(me, namedNode(rdfType), namedNode(`${schema}Person`)),
+		quad(me, namedNode(`${vcard}fn`), literal('Auke')),
+		quad(settings, namedNode(`${solid}oidcIssuer`), namedNode('https://issuer.example/')),
+		quad(settings, namedNode(`${foaf}primaryTopic`), me)
+	]
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1 ? quads.slice(0, 2) : quads.slice(2),
+				prefixes: {schema, vcard, foaf, solid, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard, foaf, solid}
+	})
+
+	const profile = context.parse('', profileUrl, 'text/turtle')
+	const settingsGraph = context.parse('', settingsUrl, 'text/turtle')
+
+	t.equal(context.graphs.length, 2)
+	t.equal(context.graphs[0], profile)
+	t.equal(context.graphs[1], settingsGraph)
+	t.equal(context.sources[profileUrl], profile)
+	t.equal(context.sources[settingsUrl], settingsGraph)
+
+	t.equal(context.get(profileUrl).id, profileUrl)
+	t.equal(String(context.get(profileUrl).vcard$fn), 'Auke')
+	t.equal(context.get(settingsUrl).foaf$primaryTopic.id, profileUrl)
+	const subjects = context.subjects
+	t.equal(subjects[settingsUrl].foaf$primaryTopic, subjects[profileUrl])
+	t.equal(subjects[profileUrl].graph, context)
+	t.same(context.data.map(subject => subject.id).sort(), [profileUrl, settingsUrl, 'https://issuer.example/'].sort())
+
+	// Graph views stay separate and unchanged.
+	t.equal(profile.get(profileUrl).graph, profile)
+	t.equal(settingsGraph.get(profileUrl).vcard$fn, undefined)
+
+	profile.get(profileUrl).schema$name = 'Auke van Slooten'
+	t.equal(String(context.get(profileUrl).schema$name), 'Auke van Slooten')
+
+	t.end()
+})
+
+tap.test('context combined read view merges the same named subject from multiple graphs', t => {
+	const profileUrl = 'https://example.org/profile/card#me'
+	const prefsUrl = 'https://example.org/profile/prefs#me'
+	const me = namedNode(profileUrl)
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1
+					? [
+						quad(me, namedNode(`${vcard}fn`), literal('Auke')),
+						quad(me, namedNode(`${schema}knowsAbout`), literal('web'))
+					]
+					: [
+						quad(me, namedNode(`${solid}oidcIssuer`), namedNode('https://issuer.example/')),
+						quad(me, namedNode(`${schema}knowsAbout`), literal('solid'))
+					],
+				prefixes: {schema, vcard, solid, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard, solid}
+	})
+
+	const profile = context.parse('', profileUrl, 'text/turtle')
+	const prefs = context.parse('', prefsUrl, 'text/turtle')
+	const combined = context.get(profileUrl)
+
+	t.equal(String(combined.vcard$fn), 'Auke')
+	t.equal(combined.solid$oidcIssuer.id, 'https://issuer.example/')
+	t.same(combined.schema$knowsAbout.map(value => String(value)), ['web', 'solid'])
+
+	// The per-resource graphs still expose only their own triples.
+	t.equal(profile.get(profileUrl).solid$oidcIssuer, undefined)
+	t.equal(prefs.get(profileUrl).vcard$fn, undefined)
+	t.equal(String(profile.get(profileUrl).schema$knowsAbout), 'web')
+	t.equal(String(prefs.get(profileUrl).schema$knowsAbout), 'solid')
+
+	t.end()
+})
+
+tap.test('adding a graph with an existing url replaces it in the context registry', t => {
+	let quads = [
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('First'))
+	]
+	const context = oldm({
+		parser() {
+			return {quads, prefixes: {vcard, rdf, xsd}}
+		},
+		prefixes: {vcard}
+	})
+
+	const firstGraph = context.parse('', url, 'text/turtle')
+	quads = [
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Second'))
+	]
+	const secondGraph = context.parse('', url, 'text/turtle')
+
+	t.equal(context.graphs.length, 1)
+	t.equal(context.graphs[0], secondGraph)
+	t.equal(context.sources[url], secondGraph)
+	t.not(context.sources[url], firstGraph)
+	t.equal(String(context.get(url).vcard$fn), 'Second')
+	t.throws(() => context.addGraph({}), /without a url/)
 
 	t.end()
 })

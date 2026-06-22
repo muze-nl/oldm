@@ -40,6 +40,27 @@ const context = oldm({
 })
 ```
 
+
+## Multiple graphs in one context
+
+A context now keeps a registry of every parsed graph. Each `context.parse()` call still returns a `Graph` for the parsed resource, while the context exposes a combined read view over all graphs loaded into that context.
+
+```javascript
+const context = oldm.context()
+
+const profile = context.parse(profileTurtle, profileUrl, 'text/turtle')
+const settings = context.parse(settingsTurtle, settingsUrl, 'text/turtle')
+
+profile.get(`${profileUrl}#me`)       // data from only the profile graph
+context.get(`${profileUrl}#me`)       // merged data from all graphs
+context.graphs                        // [profile, settings]
+context.sources[profileUrl]           // profile
+context.data                          // combined subject list
+context.subjects                      // combined subject map by full URI
+```
+
+The combined view merges named subjects by IRI and keeps the original graph views separate. Write routing and explicit source/provenance APIs are intentionally left for a later step.
+
 ## Browser bundles
 
 The friendly package builds browser bundles into `packages/oldm/dist/`: an ESM bundle for module scripts and a classic global IIFE bundle for plain script tags.
