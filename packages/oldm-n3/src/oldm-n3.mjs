@@ -1,4 +1,4 @@
-import {rdfType, NamedNode, BlankNode, Collection} from './oldm.mjs'
+import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 import { Parser, Writer, DataFactory } from 'n3'
 
 export const n3Parser = (input, uri, type) => {
@@ -26,7 +26,7 @@ export const n3Parser = (input, uri, type) => {
 export const n3Writer = (source) => {
 	return new Promise((resolve, reject) => {
 		const writer = new Writer({
-			format: source.mimetype,
+			format: source.type,
 			prefixes: {...source.prefixes}
 		})
 		const xsd = source.prefixes.xsd

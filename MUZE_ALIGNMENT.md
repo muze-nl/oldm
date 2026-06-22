@@ -51,7 +51,9 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Suggested direction:** Investigate whether N3 can be loaded differently, wrapped behind optional adapters, replaced for browser builds, or split so OLDM core remains import-map compatible.
 
-**Status:** Open
+**Status:** Partly addressed
+
+**Note:** The package is now split so `@muze-nl/oldm-core` has no direct N3 dependency and the N3 integration lives in `@muze-nl/oldm-n3`. The beginner package still uses N3 by default, so a fully import-map-compatible Turtle adapter remains a future improvement.
 
 ### 2. Document semantic tradeoffs of object mapping
 
@@ -75,7 +77,9 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Suggested direction:** Consider explicit modules: `oldm/core`, `oldm/n3`, and maybe `oldm/helpers`. Make dependency boundaries visible in imports and docs.
 
-**Status:** Open
+**Status:** Done
+
+**Note:** The repository now uses npm workspaces with `@muze-nl/oldm-core`, `@muze-nl/oldm-n3`, and the friendly `@muze-nl/oldm` package. Parser/writer dependencies are isolated from the core mapper.
 
 ### 4. Add small end-to-end Solid examples
 

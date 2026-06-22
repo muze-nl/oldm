@@ -1,0 +1,38 @@
+{
+  "name": "@muze-nl/oldm",
+  "version": "0.5.3",
+  "description": "Beginner-friendly Object - Linked Data Mapper package",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./dist/oldm.js": "./dist/oldm.js",
+    "./dist/oldm.min.js": "./dist/oldm.min.js"
+  },
+  "scripts": {
+    "test": "tap --disable-coverage test/*.mjs",
+    "coverage": "tap --allow-incomplete-coverage --show-full-coverage test/*.mjs",
+    "build-dev": "esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.js --format=esm",
+    "build": "esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.min.js --format=esm --minify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muze-nl/oldm.git",
+    "directory": "packages/oldm"
+  },
+  "author": "auke@muze.nl",
+  "license": "MIT",
+  "dependencies": {
+    "@muze-nl/oldm-core": "^0.5.3",
+    "@muze-nl/oldm-n3": "^0.5.3"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

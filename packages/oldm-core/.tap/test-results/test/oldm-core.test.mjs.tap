@@ -1,0 +1,112 @@
+TAP version 14
+# Subtest: default and named exports expose the core public API
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    1..7
+ok 1 - default and named exports expose the core public API # time=2.621ms
+
+# Subtest: one returns values according to the documented selector contract
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - expected to throw
+    1..7
+ok 2 - one returns values according to the documented selector contract # time=1.105ms
+
+# Subtest: many always returns an array without changing existing arrays
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    ok 3 - should be equivalent
+    ok 4 - should be equivalent
+    ok 5 - should be equivalent
+    ok 6 - should be equivalent
+    1..6
+ok 3 - many always returns an array without changing existing arrays # time=0.93ms
+
+# Subtest: first returns the first non-nullish value and preserves falsey values
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    1..5
+ok 4 - first returns the first non-nullish value and preserves falsey values # time=0.4ms
+
+# Subtest: parse exposes graph, primary, subjects, data, id and URI helpers
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equivalent
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - expected to throw
+    ok 15 - should be equal
+    1..15
+ok 5 - parse exposes graph, primary, subjects, data, id and URI helpers # time=1.633ms
+
+# Subtest: parse returns null primary when requested subject is absent
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 6 - parse returns null primary when requested subject is absent # time=0.237ms
+
+# Subtest: parse resolves object references, blank nodes, collections, language and typed literals
+    ok 1 - should be equivalent
+    ok 2 - should be equivalent
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equivalent
+    1..12
+ok 7 - parse resolves object references, blank nodes, collections, language and typed literals # time=0.954ms
+
+# Subtest: custom separator changes shortened predicate and type names
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 8 - custom separator changes shortened predicate and type names # time=0.332ms
+
+# Subtest: literal metadata helpers set and read datatypes and languages
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - expected to throw
+    ok 11 - expected to throw
+    1..11
+ok 9 - literal metadata helpers set and read datatypes and languages # time=0.696ms
+
+# Subtest: write delegates to the configured public writer
+    ok 1 - should be equal
+    1..1
+ok 10 - write delegates to the configured public writer # time=0.343ms
+
+1..10
