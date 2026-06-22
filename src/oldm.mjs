@@ -146,7 +146,7 @@ export class Graph
 				switch(shortPred) {
 					case 'rdf:first':
 						subject = this.addCollection(quad.subject.id)
-						shortObj = this.shortURI(quad.object.id, ':')
+						shortObj = quad.object.id ? this.shortURI(quad.object.id, ':') : null
 						if (shortObj!='rdf:nil') {
 							const value = this.getValue(quad.object)
 							if (value) {

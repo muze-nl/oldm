@@ -1949,19 +1949,19 @@
     xsd: "http://www.w3.org/2001/XMLSchema#"
   };
   function one(values, whichOne = "last") {
-    let result2 = values;
+    let result = values;
     if (Array.isArray(values)) {
       if (whichOne == "last") {
-        result2 = values[values.length - 1];
+        result = values[values.length - 1];
       } else if (whichOne == "first") {
-        result2 = values[0];
+        result = values[0];
       } else if (typeof whichOne == "function") {
-        result2 = whichOne(values);
+        result = whichOne(values);
       } else {
         throw new Error("Unknown value for whichOne parameter");
       }
     }
-    return result2;
+    return result;
   }
   function many(values) {
     if (Array.isArray(values)) {
@@ -2018,7 +2018,7 @@
       }
       if (typeof literal2 == "string") {
         literal2 = new String(literal2);
-      } else if (typeof result == "number") {
+      } else if (typeof literal2 == "number") {
         literal2 = new Number(literal2);
       }
       if (typeof literal2 !== "object") {
@@ -2050,7 +2050,7 @@
           switch (shortPred) {
             case "rdf:first":
               subject = this.addCollection(quad2.subject.id);
-              shortObj = this.shortURI(quad2.object.id, ":");
+              shortObj = quad2.object.id ? this.shortURI(quad2.object.id, ":") : null;
               if (shortObj != "rdf:nil") {
                 const value = this.getValue(quad2.object);
                 if (value) {
@@ -2146,7 +2146,7 @@
     setLanguage(literal2, language) {
       if (typeof literal2 == "string") {
         literal2 = new String(literal2);
-      } else if (typeof result == "number") {
+      } else if (typeof literal2 == "number") {
         literal2 = new Number(literal2);
       }
       if (typeof literal2 !== "object") {
@@ -2156,23 +2156,23 @@
       return literal2;
     }
     getValue(object) {
-      let result2;
+      let result;
       if (object.termType == "Literal") {
-        result2 = object.value;
+        result = object.value;
         let datatype = object.datatype?.id;
         if (datatype) {
-          result2 = this.setType(result2, datatype);
+          result = this.setType(result, datatype);
         }
         let language = object.language;
         if (language) {
-          result2 = this.setLanguage(result2, language);
+          result = this.setLanguage(result, language);
         }
       } else if (object.termType == "BlankNode") {
-        result2 = this.addBlankNode(object.id);
+        result = this.addBlankNode(object.id);
       } else {
-        result2 = this.addNamedNode(object.id);
+        result = this.addNamedNode(object.id);
       }
-      return result2;
+      return result;
     }
   };
   var BlankNode = class {
@@ -2229,7 +2229,7 @@
     }
   };
   var Collection = class extends Array {
-    constructor(id, graph) {
+    constructor(graph) {
       super();
       Object.defineProperty(this, "graph", {
         value: graph,
@@ -2316,6 +2316,9 @@
     "%": "%"
   };
   var illegalIriChars = /[\x00-\x20<>\\"\{\}\|\^\`]/;
+  function isSurrogateCodePoint(charCode) {
+    return charCode >= 55296 && charCode <= 57343;
+  }
   var lineModeRegExps = {
     _iri: true,
     _unescapedIri: true,
@@ -2621,10 +2624,20 @@
     _unescape(item) {
       let invalid = false;
       const replaced = item.replace(escapeSequence, (sequence, unicode4, unicode8, escapedChar) => {
-        if (typeof unicode4 === "string")
-          return String.fromCharCode(Number.parseInt(unicode4, 16));
+        if (typeof unicode4 === "string") {
+          const charCode = Number.parseInt(unicode4, 16);
+          if (isSurrogateCodePoint(charCode)) {
+            invalid = true;
+            return "";
+          }
+          return String.fromCharCode(charCode);
+        }
         if (typeof unicode8 === "string") {
           let charCode = Number.parseInt(unicode8, 16);
+          if (isSurrogateCodePoint(charCode)) {
+            invalid = true;
+            return "";
+          }
           return charCode <= 65535 ? String.fromCharCode(Number.parseInt(unicode8, 16)) : String.fromCharCode(55296 + ((charCode -= 65536) >> 10), 56320 + (charCode & 1023));
         }
         if (escapedChar in escapeReplacements)
@@ -2789,8 +2802,9 @@
     // ### The direction of this literal
     get direction() {
       const id = this.id;
-      const atPos = id.lastIndexOf("--") + 2;
-      return atPos > 1 && atPos < id.length ? id.substr(atPos).toLowerCase() : "";
+      const endPos = id.lastIndexOf('"');
+      const dirPos = id.lastIndexOf("--");
+      return dirPos > endPos && dirPos + 2 < id.length ? id.substr(dirPos + 2).toLowerCase() : "";
     }
     // ### The datatype IRI of this literal
     get datatype() {
@@ -3454,8 +3468,8 @@
           token = null;
           break;
         case "langcode":
-          if (token.value.length > 8)
-            return this._error("Detected language tag of length larger than 8", token);
+          if (token.value.split("-").some((t) => t.length > 8))
+            return this._error("Detected language tag with subtag longer than 8 characters", token);
           literal2 = this._factory.literal(this._literalValue, token.value);
           this._literalLanguage = token.value;
           token = null;
@@ -3895,7 +3909,7 @@
       if (!/(^|\/)\.\.?($|[/#?])/.test(iri))
         return iri;
       const length = iri.length;
-      let result2 = "", i = -1, pathStart = -1, segmentStart = 0, next = "/";
+      let result = "", i = -1, pathStart = -1, segmentStart = 0, next = "/";
       while (i < length) {
         switch (next) {
           case ":":
@@ -3914,21 +3928,21 @@
               next = iri[++i + 1];
               switch (next) {
                 case "/":
-                  result2 += iri.substring(segmentStart, i - 1);
+                  result += iri.substring(segmentStart, i - 1);
                   segmentStart = i + 1;
                   break;
                 case void 0:
                 case "?":
                 case "#":
-                  return result2 + iri.substring(segmentStart, i) + iri.substr(i + 1);
+                  return result + iri.substring(segmentStart, i) + iri.substr(i + 1);
                 case ".":
                   next = iri[++i + 1];
                   if (next === void 0 || next === "/" || next === "?" || next === "#") {
-                    result2 += iri.substring(segmentStart, i - 2);
-                    if ((segmentStart = result2.lastIndexOf("/")) >= pathStart)
-                      result2 = result2.substr(0, segmentStart);
+                    result += iri.substring(segmentStart, i - 2);
+                    if ((segmentStart = result.lastIndexOf("/")) >= pathStart)
+                      result = result.substr(0, segmentStart);
                     if (next !== "/")
-                      return `${result2}/${iri.substr(i + 1)}`;
+                      return `${result}/${iri.substr(i + 1)}`;
                     segmentStart = i + 1;
                   }
               }
@@ -3936,7 +3950,7 @@
         }
         next = iri[++i];
       }
-      return result2 + iri.substring(segmentStart);
+      return result + iri.substring(segmentStart);
     }
     // ## Public methods
     // ### `parse` parses the N3 input and emits each parsed quad through the onQuad callback.
@@ -4381,8 +4395,8 @@
         this._subject = null;
       }
       this._write = this._blockedWrite;
-      let singleDone = done && ((error, result2) => {
-        singleDone = null, done(error, result2);
+      let singleDone = done && ((error, result) => {
+        singleDone = null, done(error, result);
       });
       if (this._endStream) {
         try {
@@ -4394,17 +4408,17 @@
     }
   };
   function characterReplacer(character) {
-    let result2 = escapedCharacters[character];
-    if (result2 === void 0) {
+    let result = escapedCharacters[character];
+    if (result === void 0) {
       if (character.length === 1) {
-        result2 = character.charCodeAt(0).toString(16);
-        result2 = "\\u0000".substr(0, 6 - result2.length) + result2;
+        result = character.charCodeAt(0).toString(16);
+        result = "\\u0000".substr(0, 6 - result.length) + result;
       } else {
-        result2 = ((character.charCodeAt(0) - 55296) * 1024 + character.charCodeAt(1) + 9216).toString(16);
-        result2 = "\\U00000000".substr(0, 10 - result2.length) + result2;
+        result = ((character.charCodeAt(0) - 55296) * 1024 + character.charCodeAt(1) + 9216).toString(16);
+        result = "\\U00000000".substr(0, 10 - result.length) + result;
       }
     }
-    return result2;
+    return result;
   }
 
   // src/oldm-n3.mjs
@@ -4423,13 +4437,16 @@
   var n3Writer = (source) => {
     return new Promise((resolve, reject) => {
       const writer = new N3Writer({
-        format: source.type,
+        format: source.mimetype,
         prefixes: { ...source.prefixes }
       });
       const xsd4 = source.prefixes.xsd;
       const { quad: quad2, namedNode: namedNode2, literal: literal2, blankNode: blankNode2 } = N3DataFactory_default;
       const writeClassNames = (id, subject) => {
         let classNames = subject.a;
+        if (!classNames) {
+          return;
+        }
         if (!Array.isArray(classNames)) {
           classNames = [classNames];
         }
@@ -4532,7 +4549,7 @@
       const getBlankNode = (object) => {
         return writer.blank(getPredicates(object));
       };
-      const getArray = (id, object) => {
+      const getArray = (object) => {
         let list = [];
         for (const o of object) {
           if (isLiteral(o)) {
@@ -4552,9 +4569,9 @@
         writeClassNames(id, subject);
         writeProperties(id, subject);
       });
-      writer.end((error, result2) => {
-        if (result2) {
-          resolve(result2);
+      writer.end((error, result) => {
+        if (result) {
+          resolve(result);
         } else {
           reject(error);
         }
