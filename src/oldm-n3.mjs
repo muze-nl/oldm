@@ -34,6 +34,9 @@ export const n3Writer = (source) => {
 
 		const writeClassNames = (id, subject) => {
 			let classNames = subject.a
+			if (!classNames) {
+				return
+			}
 			if (!Array.isArray(classNames)) {
 				classNames = [ classNames ]
 			}
@@ -152,7 +155,7 @@ export const n3Writer = (source) => {
 			return writer.blank(getPredicates(object))
 		}
 
-		const getArray = (id, object) => {
+		const getArray = (object) => {
 			// array is a list of objects
 			// either object.id (named node)
 			// literal
