@@ -1,31 +1,28 @@
 {
-  "name": "@muze-nl/oldm",
+  "name": "@muze-nl/oldm-workspace",
   "version": "0.5.3",
-  "description": "Object - Linked Data Mapper",
+  "private": true,
+  "description": "Object - Linked Data Mapper monorepo",
   "type": "module",
-  "source": [
-    "src/oldm.mjs"
+  "workspaces": [
+    "packages/*"
   ],
-  "main": "src/index.mjs",
-  "directories": {
-    "test": "test"
-  },
   "scripts": {
-    "test": "tap test/*.mjs",
-    "tap": "tap",
-    "build-dev": "./node_modules/.bin/esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.js",
-    "build": "./node_modules/.bin/esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.min.js --minify"
+    "test": "npm run test --workspaces --if-present",
+    "coverage": "npm run coverage --workspaces --if-present",
+    "build-dev": "npm run build-dev --workspace @muze-nl/oldm",
+    "build": "npm run build --workspace @muze-nl/oldm"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/poef/oldm.git"
+    "url": "git+https://github.com/muze-nl/oldm.git"
   },
   "author": "auke@muze.nl",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/poef/oldm/issues"
+    "url": "https://github.com/muze-nl/oldm/issues"
   },
-  "homepage": "https://github.com/poef/oldm/#readme",
+  "homepage": "https://github.com/muze-nl/oldm/#readme",
   "devDependencies": {
     "esbuild": "0.20.2",
     "eslint": "^8.13.0",
@@ -33,14 +30,5 @@
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "dependencies": {
-    "n3": "^2.0.1"
-  },
-  "files": [
-    "dist/",
-    "src/",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

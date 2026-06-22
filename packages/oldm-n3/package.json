@@ -1,0 +1,34 @@
+{
+  "name": "@muze-nl/oldm-n3",
+  "version": "0.5.3",
+  "description": "N3 parser and writer adapter for OLDM",
+  "type": "module",
+  "main": "src/oldm-n3.mjs",
+  "exports": {
+    ".": "./src/oldm-n3.mjs"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "test": "tap --disable-coverage test/*.mjs",
+    "coverage": "tap --allow-incomplete-coverage --show-full-coverage test/*.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muze-nl/oldm.git",
+    "directory": "packages/oldm-n3"
+  },
+  "author": "auke@muze.nl",
+  "license": "MIT",
+  "dependencies": {
+    "@muze-nl/oldm-core": "^0.5.3",
+    "n3": "^2.0.1"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

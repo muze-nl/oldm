@@ -1,4 +1,4 @@
-import {rdfType, NamedNode, BlankNode, Collection} from './oldm.mjs'
+import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 import { Parser, Writer, DataFactory } from 'n3'
 
 export const n3Parser = (input, uri, type) => {

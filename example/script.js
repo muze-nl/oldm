@@ -1,4 +1,4 @@
-import oldm from '../dist/oldm.js'
+import oldm from '../packages/oldm/dist/oldm.js'
 import JSONTag from 'https://cdn.jsdelivr.net/npm/@muze-nl/jsontag@0.9.3/src/JSONTag.mjs'
 import * as metro from 'https://cdn.jsdelivr.net/npm/@muze-nl/metro@0.3.3/src/metro.mjs'
 
