@@ -2011,8 +2011,42 @@
     if (left instanceof NamedNode && right instanceof NamedNode) {
       return left.id == right.id;
     }
+    if (left instanceof NamedNode && typeof right == "string") {
+      return left.id == right;
+    }
+    if (typeof left == "string" && right instanceof NamedNode) {
+      return left == right.id;
+    }
+    if (left instanceof Collection && right instanceof Collection) {
+      return left.length == right.length && left.every((item, index) => sameValue(item, right[index]));
+    }
     if (isLiteral(left) && isLiteral(right)) {
       return String(left) == String(right) && left?.type == right?.type && left?.language == right?.language;
+    }
+    return false;
+  }
+  function sameSourceValue(left, right) {
+    if (left === right) {
+      return true;
+    }
+    if (left instanceof NamedNode && right instanceof NamedNode) {
+      return left.id == right.id;
+    }
+    if (left instanceof NamedNode && typeof right == "string") {
+      return left.id == right;
+    }
+    if (typeof left == "string" && right instanceof NamedNode) {
+      return left == right.id;
+    }
+    if (left instanceof Collection && right instanceof Collection) {
+      return left.length == right.length && left.every((item, index) => sameSourceValue(item, right[index]));
+    }
+    if (isLiteral(left) && isLiteral(right)) {
+      const leftType = left?.type;
+      const rightType = right?.type;
+      const leftLanguage = left?.language;
+      const rightLanguage = right?.language;
+      return String(left) == String(right) && (!leftType || !rightType || leftType == rightType) && (!leftLanguage || !rightLanguage || leftLanguage == rightLanguage);
     }
     return false;
   }
@@ -2043,8 +2077,8 @@
       }
       this.parser = options?.parser;
       this.writer = options?.writer;
-      this.sources = /* @__PURE__ */ Object.create(null);
       this.graphs = [];
+      this.graphsByUrl = /* @__PURE__ */ Object.create(null);
       this.separator = options?.separator ?? "$";
       Object.defineProperty(this, "subjects", {
         get() {
@@ -2081,7 +2115,7 @@
       if (!graph?.url) {
         throw new Error("Cannot add graph without a url");
       }
-      const existing = this.sources[graph.url];
+      const existing = this.graphsByUrl[graph.url];
       if (existing) {
         const index = this.graphs.indexOf(existing);
         if (index >= 0) {
@@ -2090,8 +2124,68 @@
       } else {
         this.graphs.push(graph);
       }
-      this.sources[graph.url] = graph;
+      this.graphsByUrl[graph.url] = graph;
       return graph;
+    }
+    graph(url) {
+      return this.graphsByUrl[this.fullURI(url)];
+    }
+    sources(subject, predicate = null, value = void 0) {
+      if (!subject) {
+        return [...this.graphs];
+      }
+      if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
+        return this.sourcesForBlankNode(subject, predicate, value, arguments.length >= 3);
+      }
+      const id = this.subjectID(subject);
+      if (!id) {
+        return [];
+      }
+      return this.graphs.filter((graph) => {
+        const graphSubject = graph.subjects[id];
+        return graphSubject && this.subjectHasSource(graphSubject, predicate, value, arguments.length >= 3);
+      });
+    }
+    sourcesForBlankNode(subject, predicate, value, hasValue) {
+      const graph = subject.graph;
+      if (!(graph instanceof Graph)) {
+        return [];
+      }
+      if (this.subjectHasSource(subject, predicate, value, hasValue)) {
+        return [graph];
+      }
+      return [];
+    }
+    subjectHasSource(subject, predicate, value, hasValue) {
+      if (!predicate) {
+        return true;
+      }
+      const property = this.propertyName(predicate);
+      if (!(property in subject)) {
+        return false;
+      }
+      if (!hasValue) {
+        return true;
+      }
+      return values(subject[property]).some((item) => sameSourceValue(item, value));
+    }
+    subjectID(subject) {
+      if (subject?.id) {
+        return this.fullURI(subject.id);
+      }
+      if (typeof subject == "string") {
+        return this.fullURI(subject);
+      }
+      return null;
+    }
+    propertyName(predicate) {
+      if (predicate?.id) {
+        predicate = predicate.id;
+      }
+      if (predicate == "a" || predicate == rdfType || this.fullURI(predicate) == rdfType) {
+        return "a";
+      }
+      return this.shortURI(this.fullURI(predicate));
     }
     get(shortID) {
       return this.subjects[this.fullURI(shortID)];

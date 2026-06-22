@@ -298,8 +298,10 @@ tap.test('context registers parsed graphs and exposes a combined read view', t =
 	t.equal(context.graphs.length, 2)
 	t.equal(context.graphs[0], profile)
 	t.equal(context.graphs[1], settingsGraph)
-	t.equal(context.sources[profileUrl], profile)
-	t.equal(context.sources[settingsUrl], settingsGraph)
+	t.equal(context.graph(profileUrl), profile)
+	t.equal(context.graph(settingsUrl), settingsGraph)
+	t.equal(context.graphsByUrl[profileUrl], profile)
+	t.equal(context.graphsByUrl[settingsUrl], settingsGraph)
 
 	t.equal(context.get(profileUrl).id, profileUrl)
 	t.equal(String(context.get(profileUrl).vcard$fn), 'Auke')
@@ -379,10 +381,110 @@ tap.test('adding a graph with an existing url replaces it in the context registr
 
 	t.equal(context.graphs.length, 1)
 	t.equal(context.graphs[0], secondGraph)
-	t.equal(context.sources[url], secondGraph)
-	t.not(context.sources[url], firstGraph)
+	t.equal(context.graph(url), secondGraph)
+	t.equal(context.graphsByUrl[url], secondGraph)
+	t.not(context.graph(url), firstGraph)
 	t.equal(String(context.get(url).vcard$fn), 'Second')
 	t.throws(() => context.addGraph({}), /without a url/)
+
+	t.end()
+})
+
+
+tap.test('context reports source graphs for merged subjects and properties', t => {
+	const profileUrl = 'https://example.org/profile/card#me'
+	const prefsUrl = 'https://example.org/profile/prefs#me'
+	const me = namedNode(profileUrl)
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1
+					? [
+						quad(me, namedNode(rdfType), namedNode(`${schema}Person`)),
+						quad(me, namedNode(`${vcard}fn`), literal('Auke')),
+						quad(me, namedNode(`${schema}knowsAbout`), literal('web'))
+					]
+					: [
+						quad(me, namedNode(`${solid}oidcIssuer`), namedNode('https://issuer.example/')),
+						quad(me, namedNode(`${schema}knowsAbout`), literal('solid'))
+					],
+				prefixes: {schema, vcard, solid, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard, solid}
+	})
+
+	const profile = context.parse('', profileUrl, 'text/turtle')
+	const prefs = context.parse('', prefsUrl, 'text/turtle')
+	const combined = context.get(profileUrl)
+
+	t.same(context.sources(), [profile, prefs])
+	t.same(context.sources(combined), [profile, prefs])
+	t.same(context.sources(profileUrl, 'a'), [profile])
+	t.same(context.sources(combined, rdfType), [profile])
+	t.same(context.sources(combined, 'vcard$fn'), [profile])
+	t.same(context.sources(combined, `${vcard}fn`), [profile])
+	t.same(context.sources(combined, 'vcard$fn', 'Auke'), [profile])
+	t.same(context.sources(combined, 'schema$knowsAbout', 'web'), [profile])
+	t.same(context.sources(combined, 'schema$knowsAbout', 'solid'), [prefs])
+	t.same(context.sources(combined, 'solid$oidcIssuer'), [prefs])
+	t.same(context.sources(combined, 'solid$oidcIssuer', 'https://issuer.example/'), [prefs])
+	t.same(context.sources('https://unknown.example/#me'), [])
+	t.same(context.sources(combined, 'vcard$fn', 'Someone Else'), [])
+
+	t.end()
+})
+
+tap.test('context reports source graphs for graph-scoped blank nodes and collections', t => {
+	const profileUrl = 'https://example.org/profile/card#me'
+	const prefsUrl = 'https://example.org/profile/prefs#me'
+	const me = namedNode(profileUrl)
+	const profileEmail = blankNode('email')
+	const prefsEmail = blankNode('email')
+	const listA = blankNode('list-a')
+	const listB = blankNode('list-b')
+	let call = 0
+	const context = oldm({
+		parser() {
+			call++
+			return {
+				quads: call == 1
+					? [
+						quad(listA, namedNode(`${rdf}first`), literal('web')),
+						quad(listA, namedNode(`${rdf}rest`), listB),
+						quad(listB, namedNode(`${rdf}first`), literal('solid')),
+						quad(listB, namedNode(`${rdf}rest`), namedNode(`${rdf}nil`)),
+						quad(profileEmail, namedNode(`${vcard}value`), namedNode('mailto:profile@example.org')),
+						quad(me, namedNode(`${vcard}hasEmail`), profileEmail),
+						quad(me, namedNode(`${schema}knowsAbout`), listA)
+					]
+					: [
+						quad(prefsEmail, namedNode(`${vcard}value`), namedNode('mailto:prefs@example.org')),
+						quad(me, namedNode(`${vcard}hasEmail`), prefsEmail)
+					],
+				prefixes: {schema, vcard, rdf, xsd}
+			}
+		},
+		prefixes: {schema, vcard}
+	})
+
+	const profile = context.parse('', profileUrl, 'text/turtle')
+	const prefs = context.parse('', prefsUrl, 'text/turtle')
+	const combined = context.get(profileUrl)
+	const emails = combined.vcard$hasEmail
+
+	t.equal(emails.length, 2)
+	t.not(emails[0], emails[1])
+	t.same(context.sources(combined, 'vcard$hasEmail', emails[0]), [profile])
+	t.same(context.sources(combined, 'vcard$hasEmail', emails[1]), [prefs])
+	t.same(context.sources(emails[0]), [profile])
+	t.same(context.sources(emails[1]), [prefs])
+	t.same(context.sources(emails[0], 'vcard$value'), [profile])
+	t.same(context.sources(emails[0], 'vcard$value', 'mailto:profile@example.org'), [profile])
+	t.same(context.sources(emails[0], 'vcard$value', 'mailto:prefs@example.org'), [])
+	t.same(context.sources(combined, 'schema$knowsAbout', combined.schema$knowsAbout), [profile])
 
 	t.end()
 })

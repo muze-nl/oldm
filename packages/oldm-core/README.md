@@ -26,12 +26,18 @@ const settings = context.parse(settingsTurtle, settingsUrl, 'text/turtle')
 profile.get(`${profileUrl}#me`)       // graph-specific view
 context.get(`${profileUrl}#me`)       // combined context view
 context.graphs                        // parsed graphs in load order
-context.sources[profileUrl]           // graph by source URL
+context.graph(profileUrl)             // graph by source URL
 context.data                          // combined subjects
 context.subjects                      // combined subject map
+context.sources(context.get(`${profileUrl}#me`))
+// graphs containing that subject
+context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
+// graphs containing that property
+context.sources(context.get(`${profileUrl}#me`), 'vcard$fn', 'Auke')
+// graphs containing that specific value
 ```
 
-The combined context view currently merges named subjects by IRI. Graph-specific views remain unchanged, so code can still separate data by original resource.
+The combined context view currently merges named subjects by IRI. Graph-specific views remain unchanged, so code can still separate data by original resource. Blank nodes remain graph-scoped.
 
 ## Public exports
 

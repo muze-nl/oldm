@@ -54,12 +54,16 @@ const settings = context.parse(settingsTurtle, settingsUrl, 'text/turtle')
 profile.get(`${profileUrl}#me`)       // data from only the profile graph
 context.get(`${profileUrl}#me`)       // merged data from all graphs
 context.graphs                        // [profile, settings]
-context.sources[profileUrl]           // profile
+context.graph(profileUrl)             // profile
 context.data                          // combined subject list
 context.subjects                      // combined subject map by full URI
+context.sources(context.get(`${profileUrl}#me`))
+// [profile, settings] when both graphs contain data for that subject
+context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
+// [profile] when only the profile graph contains that property
 ```
 
-The combined view merges named subjects by IRI and keeps the original graph views separate. Write routing and explicit source/provenance APIs are intentionally left for a later step.
+The combined view merges named subjects by IRI and keeps the original graph views separate. `context.sources(subject, predicate, value)` can be used to inspect which graph contributed a subject, property, or specific property value. Write routing is intentionally left for a later step.
 
 ## Browser bundles
 

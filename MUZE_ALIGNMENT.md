@@ -65,7 +65,9 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Suggested direction:** Add a “What is preserved / what is simplified” section. Include examples of cycles, one-or-many values, literals with types/languages, and subject identity.
 
-**Status:** Open
+**Status:** Partly addressed
+
+**Note:** `Context` now keeps a registry of parsed graphs, exposes a combined read view, and provides `context.sources(subject, predicate, value)` so users can inspect which original graph contributed data. The main remaining piece is source-aware write routing for edits made through the combined context view.
 
 ### 3. Separate core graph/object mapping from parser/writer adapters
 
