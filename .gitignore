@@ -1,2 +1,4 @@
 node_modules/
 package-lock.json
+packages/oldm-core/.tap/
+packages/oldm-n3/.tap/
