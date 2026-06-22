@@ -29,7 +29,7 @@
   "devDependencies": {
     "esbuild": "0.20.2",
     "eslint": "^8.13.0",
-    "tap": "^16.0.1"
+    "tap": "^21.7.4"
   },
   "engines": {
     "node": ">=20.0.0"
