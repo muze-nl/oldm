@@ -108,7 +108,7 @@ export class Context {
 		}
 		if (typeof literal == 'string') {
 			literal = new String(literal)
-		} else if (typeof result == 'number') {
+		} else if (typeof literal == 'number') {
 			literal = new Number(literal)
 		}
 		if (typeof literal !== 'object') {
@@ -146,7 +146,7 @@ export class Graph
 				switch(shortPred) {
 					case 'rdf:first':
 						subject = this.addCollection(quad.subject.id)
-						shortObj = this.shortURI(quad.object.id, ':')
+						shortObj = quad.object.id ? this.shortURI(quad.object.id, ':') : null
 						if (shortObj!='rdf:nil') {
 							const value = this.getValue(quad.object)
 							if (value) {
@@ -263,7 +263,7 @@ export class Graph
 	{
 		if (typeof literal == 'string') {
 			literal = new String(literal)
-		} else if (typeof result == 'number') {
+		} else if (typeof literal == 'number') {
 			literal = new Number(literal)
 		}
 		if (typeof literal !== 'object') {
@@ -363,7 +363,7 @@ export class NamedNode extends BlankNode
 
 export class Collection extends Array
 {
-	constructor(id, graph)
+	constructor(graph)
 	{
 		super()
 		Object.defineProperty(this, 'graph', {
