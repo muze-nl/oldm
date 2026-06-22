@@ -134,7 +134,6 @@ export class Graph
 	constructor(quads, url, mimetype, prefixes, context)
 	{
 		this.mimetype = mimetype
-		this.type     = mimetype
 		this.url      = url
 		this.prefixes = prefixes
 		this.context  = context

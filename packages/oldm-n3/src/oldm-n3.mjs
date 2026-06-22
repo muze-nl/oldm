@@ -26,7 +26,7 @@ export const n3Parser = (input, uri, type) => {
 export const n3Writer = (source) => {
 	return new Promise((resolve, reject) => {
 		const writer = new Writer({
-			format: source.type,
+			format: source.mimetype,
 			prefixes: {...source.prefixes}
 		})
 		const xsd = source.prefixes.xsd

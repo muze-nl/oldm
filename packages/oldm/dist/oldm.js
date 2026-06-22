@@ -2037,7 +2037,6 @@ var Graph = class {
   #blankNodes = /* @__PURE__ */ Object.create(null);
   constructor(quads, url, mimetype, prefixes2, context) {
     this.mimetype = mimetype;
-    this.type = mimetype;
     this.url = url;
     this.prefixes = prefixes2;
     this.context = context;
@@ -4437,7 +4436,7 @@ var n3Parser = (input, uri, type) => {
 var n3Writer = (source) => {
   return new Promise((resolve, reject) => {
     const writer = new N3Writer({
-      format: source.type,
+      format: source.mimetype,
       prefixes: { ...source.prefixes }
     });
     const xsd4 = source.prefixes.xsd;

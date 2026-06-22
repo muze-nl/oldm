@@ -115,7 +115,6 @@ tap.test('parse exposes graph, primary, subjects, data, id and URI helpers', t =
 	const source = contextFor(quads).parse('', url, 'text/turtle')
 
 	t.equal(source.url, url)
-	t.equal(source.type, 'text/turtle')
 	t.equal(source.mimetype, 'text/turtle')
 	t.equal(source.primary.id, url)
 	t.equal(String(source.primary.vcard$fn), 'Auke')
