@@ -1,5 +1,5 @@
 {
-  "date": "2026-06-22T15:45:09.267Z",
+  "date": "2026-06-23T06:58:30.155Z",
   "argv": [
     "/home/auke/.nvm/versions/node/v24.7.0/bin/node",
     "/home/auke/git/muze-nl/oldm/packages/oldm-turtle/test/oldm-turtle.test.mjs"
@@ -12,10 +12,10 @@
   ],
   "NODE_OPTIONS": "\"--import=file:///home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/import.mjs\"",
   "cwd": "/home/auke/git/muze-nl/oldm/packages/oldm-turtle",
-  "pid": 300131,
-  "ppid": 300120,
+  "pid": 316908,
+  "ppid": 316890,
   "parent": null,
-  "uuid": "65510676-a66c-4650-b57f-ad21076b1fa0",
+  "uuid": "0fe94859-f7b1-4522-8516-7d02e5c165f2",
   "files": [
     "/home/auke/git/muze-nl/oldm/packages/oldm-turtle/test/oldm-turtle.test.mjs",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/typescript/dist/esm/import.mjs",
@@ -50,28 +50,24 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/waiter.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/worker.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/tap.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/resolve-import/dist/esm/is-windows.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/dist/esm/call-site-like.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/dist/esm/require-resolve.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/throw-to-parser.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/resolve-import/dist/esm/is-windows.js",
     "/home/auke/git/muze-nl/oldm/node_modules/async-hook-domain/dist/mjs/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/minipass/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/diags.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/message-from-error.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/throw-to-parser.js",
     "/home/auke/git/muze-nl/oldm/node_modules/is-actual-promise/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/trivial-deferred/dist/mjs/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/esc.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/implicit-end-sigil.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/dist/esm/parse.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/child_process.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/process-info-node.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/json-file.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/test-built/dist/esm/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/default-plugins.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/clean-yaml-object.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/final-results.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/line-type.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/parse-directive.js",
@@ -79,7 +75,17 @@
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/result.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/statics.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/escape.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/clean-yaml-object.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/child_process.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/process-info-node.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/json-file.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/test-built/dist/esm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/parse.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/stringify.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/default-plugins.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/final-plan.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/brace-patterns.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/spawn-opts.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/after/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/after-each/dist/esm/index.js",
@@ -98,22 +104,17 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/typescript/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/worker/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/jackspeak/dist/esm/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/parse.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/stringify.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/final-plan.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/brace-patterns.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/dist/esm/fixture.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/dist/esm/mock-require.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/serialize.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/clean-cwd.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/provider.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/dist/esm/index.min.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/format.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/has-strict.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/has.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match-only.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match-strict.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match-only-strict.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/same.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/strict.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/styles.js",
     "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/function-loop/dist/mjs/index.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/asserts/dist/esm/normalize-throws-args.js",
     "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/diff/base.js",
     "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/diff/character.js",
     "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/diff/word.js",
@@ -128,16 +129,22 @@
     "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/patch/create.js",
     "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/convert/dmp.js",
     "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/convert/xml.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/format.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/has-strict.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/has.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match-only.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match-strict.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match-only-strict.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/match.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/same.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/strict.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/styles.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/function-loop/dist/mjs/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/asserts/dist/esm/normalize-throws-args.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/dist/esm/fixture.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/dist/esm/mock-require.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/clean-cwd.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/provider.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/serialize.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/util/string.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/dist/esm/index.min.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/util/distance-iterator.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/react-element-to-jsx-string.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/date.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/timestamp.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/util/params.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/patch/line-endings.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/glob/dist/esm/index.min.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/opt-arg.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/path-arg.js",
@@ -149,27 +156,19 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/use-native.js",
     "/home/auke/git/muze-nl/oldm/node_modules/mkdirp/dist/mjs/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/walk-up-path/dist/esm/index.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/require.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/dist/esm/index.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/comment.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/on-add.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/print-messages.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/stdio.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-map.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/require.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/timestamp.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/date.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/util/string.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/util/params.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/react-element-to-jsx-string.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-at.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/patch/line-endings.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/diff/libesm/util/distance-iterator.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/default-tmp.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/ignore-enoent.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/fs.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/readdir-or-error.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/error.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/fix-eperm.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/error.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/retry-busy.js",
     "/home/auke/git/muze-nl/oldm/node_modules/mkdirp/dist/mjs/mkdirp-manual.js",
     "/home/auke/git/muze-nl/oldm/node_modules/mkdirp/dist/mjs/mkdirp-native.js",
@@ -182,13 +181,14 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/dist/esm/test-stream-deserialize.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/dist/esm/messages.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/dist/esm/constants.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-at.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-nested-location.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-message-data.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-point-message-data.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-point-results.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-results.js",
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-callsite.js",
     "/home/auke/git/muze-nl/oldm/node_modules/mkdirp/dist/mjs/find-made.js",
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-callsite.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/result-to-error.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/pretty-diff.js",
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/dist/esm/loader.mjs",
@@ -308,29 +308,20 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/tap.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/tap.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/resolve-import/dist/esm/is-windows.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/resolve-import/src/is-windows.ts"
-    ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/dist/esm/call-site-like.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/src/call-site-like.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/dist/esm/require-resolve.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/src/require-resolve.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/throw-to-parser.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/throw-to-parser.ts"
+    "/home/auke/git/muze-nl/oldm/node_modules/resolve-import/dist/esm/is-windows.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/resolve-import/src/is-windows.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/async-hook-domain/dist/mjs/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/async-hook-domain/src/index.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/minipass/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/minipass/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/src/index.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/index.ts"
@@ -340,6 +331,12 @@
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/message-from-error.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/message-from-error.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/throw-to-parser.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/throw-to-parser.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/is-actual-promise/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/is-actual-promise/src/index.ts"
@@ -353,26 +350,17 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/implicit-end-sigil.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/implicit-end-sigil.ts"
     ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/src/index.ts"
+    ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/dist/esm/parse.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/stack/src/parse.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/child_process.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/child_process.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/process-info-node.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/process-info-node.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/json-file.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/json-file.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/test-built/dist/esm/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/test-built/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/default-plugins.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/src/default-plugins.ts"
-    ],
     "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/clean-yaml-object.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/clean-yaml-object.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/final-results.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/final-results.ts"
@@ -395,8 +383,35 @@
     "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/escape.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/escape.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/dist/esm/clean-yaml-object.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/core/src/clean-yaml-object.ts"
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/child_process.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/child_process.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/process-info-node.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/process-info-node.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/json-file.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/json-file.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/test-built/dist/esm/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/test-built/src/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/parse.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/parse.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/stringify.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/stringify.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/dist/esm/default-plugins.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/test/src/default-plugins.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tcompare/src/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/final-plan.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/final-plan.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/brace-patterns.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/brace-patterns.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/dist/esm/spawn-opts.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/processinfo/src/spawn-opts.ts"
@@ -452,58 +467,6 @@
     "/home/auke/git/muze-nl/oldm/node_modules/jackspeak/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/jackspeak/src/index.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/parse.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/parse.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/stringify.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/stringify.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/final-plan.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/final-plan.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/dist/esm/brace-patterns.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-parser/src/brace-patterns.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tcompare/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/dist/esm/fixture.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/src/fixture.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/dist/esm/mock-require.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/src/mock-require.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/serialize.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/serialize.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/clean-cwd.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/src/clean-cwd.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/provider.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/src/provider.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/dist/esm/index.min.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/ansi-regex/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/strip-ansi/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/eastasianwidth/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/emoji-regex/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/string-width/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/ansi-styles/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/wrap-ansi/index.ts",
-      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/types/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/function-loop/dist/mjs/index.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/function-loop/src/index.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/asserts/dist/esm/normalize-throws-args.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/asserts/src/normalize-throws-args.ts"
-    ],
     "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/format.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/tcompare/src/format.ts"
     ],
@@ -533,6 +496,52 @@
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/styles.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/tcompare/src/styles.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/types/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/function-loop/dist/mjs/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/function-loop/src/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/asserts/dist/esm/normalize-throws-args.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/asserts/src/normalize-throws-args.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/index.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/index.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/dist/esm/fixture.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/src/fixture.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/dist/esm/mock-require.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/mock/src/mock-require.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/clean-cwd.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/src/clean-cwd.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/provider.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/src/provider.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/serialize.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/serialize.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/react-element-to-jsx-string.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tcompare/src/react-element-to-jsx-string.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/date.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/types/date.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/timestamp.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/types/timestamp.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/dist/esm/index.min.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/ansi-regex/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/strip-ansi/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/eastasianwidth/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/emoji-regex/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/string-width/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/ansi-styles/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/wrap-ansi/index.ts",
+      "/home/auke/git/muze-nl/oldm/node_modules/@isaacs/cliui/src/index.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/glob/dist/esm/index.min.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/glob/node_modules/balanced-match/src/index.ts",
@@ -584,6 +593,9 @@
     "/home/auke/git/muze-nl/oldm/node_modules/walk-up-path/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/walk-up-path/src/index.ts"
     ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/require.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/src/require.ts"
+    ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/dist/esm/index.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/src/index.ts"
     ],
@@ -602,21 +614,6 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-map.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/test-map.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/dist/esm/require.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/snapshot/src/require.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/timestamp.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/types/timestamp.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/dist/esm/types/date.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tap-yaml/src/types/date.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/tcompare/dist/esm/react-element-to-jsx-string.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/tcompare/src/react-element-to-jsx-string.ts"
-    ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-at.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/loc-from-at.ts"
-    ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/default-tmp.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/default-tmp.ts"
     ],
@@ -629,11 +626,11 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/readdir-or-error.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/readdir-or-error.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/error.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/error.ts"
-    ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/fix-eperm.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/fix-eperm.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/error.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/error.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/dist/esm/retry-busy.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/fixture/node_modules/rimraf/src/retry-busy.ts"
@@ -671,6 +668,9 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/dist/esm/constants.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/error-serdes/src/constants.ts"
     ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-at.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/loc-from-at.ts"
+    ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-nested-location.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/test-nested-location.ts"
     ],
@@ -686,11 +686,11 @@
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/test-results.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/test-results.ts"
     ],
-    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-callsite.js": [
-      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/loc-from-callsite.ts"
-    ],
     "/home/auke/git/muze-nl/oldm/node_modules/mkdirp/dist/mjs/find-made.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/mkdirp/src/find-made.ts"
+    ],
+    "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/loc-from-callsite.js": [
+      "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/loc-from-callsite.ts"
     ],
     "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/dist/esm/result-to-error.js": [
       "/home/auke/git/muze-nl/oldm/node_modules/@tapjs/node-serialize/src/result-to-error.ts"
@@ -705,9 +705,9 @@
       "/home/auke/git/muze-nl/oldm/node_modules/tap/src/main.ts"
     ]
   },
-  "root": "65510676-a66c-4650-b57f-ad21076b1fa0",
+  "root": "0fe94859-f7b1-4522-8516-7d02e5c165f2",
   "externalID": "test/oldm-turtle.test.mjs",
   "code": 0,
   "signal": null,
-  "runtime": 486.097899
+  "runtime": 489.856939
 }

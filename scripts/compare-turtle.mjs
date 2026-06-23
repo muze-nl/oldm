@@ -5,6 +5,7 @@ import {build} from 'esbuild'
 import oldm from '@muze-nl/oldm-core'
 import {n3Parser, n3Writer} from '@muze-nl/oldm-n3'
 import {turtleParser, turtleWriter} from '@muze-labs/oldm-turtle'
+import {turtleReferenceParser, turtleWriter as referenceTurtleWriter} from '@muze-labs/oldm-turtle/reference'
 
 const outputDir = new URL('../.tmp/turtle-comparison/', import.meta.url)
 await rm(outputDir, {recursive: true, force: true})
@@ -12,6 +13,8 @@ await mkdir(outputDir, {recursive: true})
 
 const turtleEntry = new URL('oldm-turtle-entry.mjs', outputDir)
 const turtleGlobalEntry = new URL('oldm-turtle-global.mjs', outputDir)
+const referenceTurtleEntry = new URL('oldm-turtle-reference-entry.mjs', outputDir)
+const referenceTurtleGlobalEntry = new URL('oldm-turtle-reference-global.mjs', outputDir)
 await writeFile(turtleEntry, `
 import oldmCore, * as core from '@muze-nl/oldm-core'
 import * as turtle from '@muze-labs/oldm-turtle'
@@ -36,6 +39,30 @@ await writeFile(turtleGlobalEntry, `
 import oldm from './oldm-turtle-entry.mjs'
 globalThis.oldm = oldm
 `)
+await writeFile(referenceTurtleEntry, `
+import oldmCore, * as core from '@muze-nl/oldm-core'
+import * as turtle from '@muze-labs/oldm-turtle/reference'
+
+const oldm = {
+	context(options = {}) {
+		return oldmCore({
+			parser: turtle.turtleReferenceParser,
+			writer: turtle.turtleWriter,
+			...options
+		})
+	},
+	...core,
+	...turtle
+}
+
+globalThis.oldm = oldm
+
+export default oldm
+`)
+await writeFile(referenceTurtleGlobalEntry, `
+import oldm from './oldm-turtle-reference-entry.mjs'
+globalThis.oldm = oldm
+`)
 
 const bundles = [
 	{
@@ -51,6 +78,12 @@ const bundles = [
 		outfile: new URL('oldm-turtle.min.js', outputDir).pathname
 	},
 	{
+		name: 'oldm + oldm-turtle-reference ESM',
+		entry: referenceTurtleEntry.pathname,
+		format: 'esm',
+		outfile: new URL('oldm-turtle-reference.min.js', outputDir).pathname
+	},
+	{
 		name: 'oldm + oldm-n3 IIFE',
 		entry: 'packages/oldm/src/global.mjs',
 		format: 'iife',
@@ -61,6 +94,12 @@ const bundles = [
 		entry: turtleGlobalEntry.pathname,
 		format: 'iife',
 		outfile: new URL('oldm-turtle.global.min.js', outputDir).pathname
+	},
+	{
+		name: 'oldm + oldm-turtle-reference IIFE',
+		entry: referenceTurtleGlobalEntry.pathname,
+		format: 'iife',
+		outfile: new URL('oldm-turtle-reference.global.min.js', outputDir).pathname
 	}
 ]
 
@@ -88,7 +127,8 @@ const warmup = 100
 const benchmarkRows = []
 for (const adapter of [
 	{name: 'oldm-n3', parser: n3Parser, writer: n3Writer},
-	{name: 'oldm-turtle', parser: turtleParser, writer: turtleWriter}
+	{name: 'oldm-turtle', parser: turtleParser, writer: turtleWriter},
+	{name: 'oldm-turtle-reference', parser: turtleReferenceParser, writer: referenceTurtleWriter}
 ]) {
 	for (const document of docs) {
 		for (let i=0; i<warmup; i++) {
@@ -136,8 +176,12 @@ const esmN3 = sizeRows.find(row => row.bundle == 'oldm + oldm-n3 ESM')
 const esmTurtle = sizeRows.find(row => row.bundle == 'oldm + oldm-turtle ESM')
 const iifeN3 = sizeRows.find(row => row.bundle == 'oldm + oldm-n3 IIFE')
 const iifeTurtle = sizeRows.find(row => row.bundle == 'oldm + oldm-turtle IIFE')
+const esmOhmTurtle = sizeRows.find(row => row.bundle == 'oldm + oldm-turtle-reference ESM')
+const iifeOhmTurtle = sizeRows.find(row => row.bundle == 'oldm + oldm-turtle-reference IIFE')
 console.log(`\nESM reduction: ${round((esmN3.bytes - esmTurtle.bytes) / 1024)} kB minified, ${round((esmN3.gzipBytes - esmTurtle.gzipBytes) / 1024)} kB gzip`)
 console.log(`IIFE reduction: ${round((iifeN3.bytes - iifeTurtle.bytes) / 1024)} kB minified, ${round((iifeN3.gzipBytes - iifeTurtle.gzipBytes) / 1024)} kB gzip`)
+console.log(`Reference parser vs handwritten ESM: +${round((esmOhmTurtle.bytes - esmTurtle.bytes) / 1024)} kB minified, +${round((esmOhmTurtle.gzipBytes - esmTurtle.gzipBytes) / 1024)} kB gzip`)
+console.log(`Reference parser vs handwritten IIFE: +${round((iifeOhmTurtle.bytes - iifeTurtle.bytes) / 1024)} kB minified, +${round((iifeOhmTurtle.gzipBytes - iifeTurtle.gzipBytes) / 1024)} kB gzip`)
 
 console.log('\nSmall Solid-style document benchmark')
 console.table(benchmarkRows.map(row => ({

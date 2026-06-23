@@ -1,32 +1,36 @@
 {
-  "name": "@muze-labs/oldm-turtle",
-  "version": "0.1.0",
-  "description": "Small Turtle 1.1 parser/writer adapter for OLDM",
-  "type": "module",
-  "main": "src/oldm-turtle.mjs",
-  "exports": {
-    ".": "./src/oldm-turtle.mjs"
-  },
-  "scripts": {
-    "test": "tap --disable-coverage test/*.mjs",
-    "coverage": "tap --allow-incomplete-coverage --show-full-coverage test/*.mjs"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/muze-nl/oldm.git",
-    "directory": "packages/oldm-turtle"
-  },
-  "author": "auke@muze.nl",
-  "license": "MIT",
-  "dependencies": {
-    "@muze-nl/oldm-core": "^0.5.3"
-  },
-  "files": [
-    "src/",
-    "README.md",
-    "LICENSE"
-  ],
-  "engines": {
-    "node": ">=20.0.0"
-  }
+	"name": "@muze-labs/oldm-turtle",
+	"version": "0.1.0",
+	"description": "Small Turtle 1.1 parser/writer adapter for OLDM",
+	"type": "module",
+	"main": "src/oldm-turtle.mjs",
+	"exports": {
+		".": "./src/oldm-turtle.mjs",
+		"./ohm18": "./src/oldm-turtle-ohm18.mjs",
+		"./reference": "./src/oldm-turtle-reference.mjs"
+	},
+	"scripts": {
+		"test": "tap --disable-coverage test/*.mjs",
+		"coverage": "tap --allow-incomplete-coverage --show-full-coverage test/*.mjs",
+		"test:reference": "tap --disable-coverage test/oldm-turtle-reference*.test.mjs"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/muze-nl/oldm.git",
+		"directory": "packages/oldm-turtle"
+	},
+	"author": "auke@muze.nl",
+	"license": "MIT",
+	"dependencies": {
+		"@muze-nl/oldm-core": "^0.5.3",
+		"ohm-js": "18.0.0-beta.10"
+	},
+	"files": [
+		"src/",
+		"README.md",
+		"LICENSE"
+	],
+	"engines": {
+		"node": ">=20.0.0"
+	}
 }

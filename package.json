@@ -1,35 +1,42 @@
 {
-  "name": "@muze-nl/oldm-workspace",
-  "version": "0.5.3",
-  "private": true,
-  "description": "Object - Linked Data Mapper monorepo",
-  "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
-  "scripts": {
-    "test": "npm run test --workspaces --if-present",
-    "coverage": "npm run coverage --workspaces --if-present",
-    "build-dev": "npm run build-dev --workspace @muze-nl/oldm",
-    "build": "npm run build --workspace @muze-nl/oldm",
-    "compare:turtle": "node scripts/compare-turtle.mjs"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/muze-nl/oldm.git"
-  },
-  "author": "auke@muze.nl",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/muze-nl/oldm/issues"
-  },
-  "homepage": "https://github.com/muze-nl/oldm/#readme",
-  "devDependencies": {
-    "esbuild": "0.20.2",
-    "eslint": "^8.13.0",
-    "tap": "^21.7.4"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  }
+	"name": "@muze-nl/oldm-workspace",
+	"version": "0.5.3",
+	"private": true,
+	"description": "Object - Linked Data Mapper monorepo",
+	"type": "module",
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"test": "npm run test --workspaces --if-present",
+		"coverage": "npm run coverage --workspaces --if-present",
+		"build-dev": "npm run build-dev --workspace @muze-nl/oldm",
+		"build": "npm run build --workspace @muze-nl/oldm",
+		"compare:turtle": "node scripts/compare-turtle.mjs",
+		"build:turtle-ohm": "node scripts/compile-ohm-turtle.mjs",
+		"benchmark:turtle:ohm": "npm run build:turtle-ohm && node scripts/benchmark-turtle-ohm.mjs",
+		"evaluate:turtle:ohm": "npm run build:turtle-ohm && node scripts/evaluate-turtle-ohm-switch.mjs",
+		"test:turtle:reference": "npm run test:reference --workspace @muze-labs/oldm-turtle"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/muze-nl/oldm.git"
+	},
+	"author": "auke@muze.nl",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/muze-nl/oldm/issues"
+	},
+	"homepage": "https://github.com/muze-nl/oldm/#readme",
+	"devDependencies": {
+		"@ohm-js/compiler": "18.0.0-beta.10",
+		"esbuild": "0.20.2",
+		"eslint": "^8.13.0",
+		"ohm-js": "18.0.0-beta.10",
+		"ohm-js-17": "npm:ohm-js@17.5.0",
+		"tap": "^21.7.4"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	}
 }
