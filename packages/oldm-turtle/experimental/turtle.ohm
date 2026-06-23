@@ -1,0 +1,86 @@
+// Experimental Turtle recognizer grammar for benchmarking Ohm.js.
+// This is intentionally limited to the Turtle 1.1 subset currently handled by
+// @muze-labs/oldm-turtle. It recognizes the syntax; it does not build OLDM quads.
+
+TurtleSubset {
+	Document = Statement*
+
+	Statement
+		= Directive -- directive
+		| Triples "." -- triples
+
+	Directive
+		= PrefixDirective "."? -- prefix
+		| BaseDirective "."? -- base
+		| SparqlPrefix -- sparqlPrefix
+		| SparqlBase -- sparqlBase
+
+	PrefixDirective = "@prefix" PrefixLabel iriRef
+	BaseDirective = "@base" iriRef
+	SparqlPrefix = "PREFIX" PrefixLabel iriRef
+	SparqlBase = "BASE" iriRef
+
+	Triples = Subject PredicateObjectList
+	PredicateObjectList = Predicate ObjectList (";" Predicate ObjectList)* ";"?
+	ObjectList = Object ("," Object)*
+
+	Subject = Resource | BlankNodePropertyList | Collection
+	Predicate = rdfType | Resource
+	Object = Resource | BlankNodePropertyList | Collection | Literal
+
+	Resource = iriRef | blankNodeLabel | prefixedName
+	BlankNodePropertyList = "[" PredicateObjectList? "]"
+	Collection = "(" Object* ")"
+
+	Literal
+		= stringLiteral "^^" Resource -- typed
+		| stringLiteral langTag -- language
+		| stringLiteral -- plain
+		| booleanLiteral -- boolean
+		| numericLiteral -- numeric
+
+	PrefixLabel = name? ":"
+	rdfType = "a" ~nameChar
+
+	prefixedName = name? ":" localName?
+	blankNodeLabel = "_:" name
+
+	iriRef = "<" iriChar* ">"
+	iriChar = escape | ~(">" | "\n" | "\r") any
+
+	stringLiteral = tripleDoubleString | tripleSingleString | doubleString | singleString
+	doubleString = "\"" doubleStringChar* "\""
+	singleString = "'" singleStringChar* "'"
+	tripleDoubleString = "\"\"\"" tripleDoubleStringChar* "\"\"\""
+	tripleSingleString = "'''" tripleSingleStringChar* "'''"
+	doubleStringChar = escape | ~("\"" | "\\" | "\n" | "\r") any
+	singleStringChar = escape | ~("'" | "\\" | "\n" | "\r") any
+	tripleDoubleStringChar = escape | ~("\"\"\"") any
+	tripleSingleStringChar = escape | ~("'''") any
+	escape = "\\" ("t" | "b" | "n" | "r" | "f" | "\"" | "'" | "\\" | unicodeEscape)
+	unicodeEscape
+		= "u" hexDigit hexDigit hexDigit hexDigit -- small
+		| "U" hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit -- large
+
+	langTag = "@" letter+ ("-" alnum+)*
+	booleanLiteral = ("true" | "false") ~nameChar
+	numericLiteral = sign? numericBody
+	numericBody
+		= decimal exponent? -- decimal
+		| integer exponent -- double
+		| integer -- integer
+	decimal
+		= digit+ "." digit* -- leading
+		| "." digit+ -- trailing
+	integer = digit+
+	exponent = ("e" | "E") sign? digit+
+	sign = "+" | "-"
+
+	name = letter nameChar*
+	nameChar = alnum | "_" | "-"
+	localName = localNameChar+
+	localNameChar = ~(space | ";" | "," | "." | "[" | "]" | "(" | ")" | "<" | ">" | "\"" | "'" | "#") any
+
+	space += comment
+	comment = "#" (~("\n" | "\r") any)*
+}

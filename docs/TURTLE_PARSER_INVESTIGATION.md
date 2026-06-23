@@ -144,3 +144,94 @@ A good next milestone:
 4. Improve writer prefix selection.
 5. Decide whether unsupported Turtle features should fail explicitly or remain outside scope.
 ```
+
+## Ohm.js recognizer experiment
+
+There is also an experimental Ohm.js recognizer in:
+
+```text
+packages/oldm-turtle/experimental/turtle.ohm
+```
+
+This is not part of the published `@muze-labs/oldm-turtle` package. It exists to answer a narrow question: has the newer Ohm.js WebAssembly backend become fast enough to make an Ohm-based Turtle parser worth considering?
+
+The experiment deliberately benchmarks Ohm in **recognition-only** mode. It checks whether a document matches the grammar, but it does not yet walk the CST or build OLDM quads. This isolates the parser-engine cost. A real Ohm backend would still need CST walking, IRI resolution, prefix handling, blank-node/list construction, literal metadata, and useful error mapping.
+
+### Scripts
+
+Compile the Ohm v18 WebAssembly grammar:
+
+```sh
+npm run build:turtle-ohm
+```
+
+Run the Ohm comparison benchmark:
+
+```sh
+npm run benchmark:turtle:ohm
+```
+
+You can increase or decrease the base iteration count:
+
+```sh
+TURTLE_BENCH_ITERATIONS=500 npm run benchmark:turtle:ohm
+```
+
+The benchmark currently compares:
+
+- handwritten `oldm-turtle` parser, direct parse to quads
+- handwritten `oldm-turtle` parser through OLDM core
+- `oldm-n3` parser through OLDM core
+- Ohm.js 17 recognizer
+- Ohm.js 18 beta WebAssembly recognizer
+
+### Current local result
+
+On this development container, with the default `TURTLE_BENCH_ITERATIONS=100`, the Ohm setup costs were:
+
+| item | size | gzip | setup |
+| --- | ---: | ---: | ---: |
+| Ohm v17 grammar source | 2.74 kB | 1.06 kB | 63.63 ms |
+| Ohm v18 compiled wasm | 32.41 kB | 7.48 kB | 4.97 ms |
+
+The parser benchmark produced:
+
+| engine | mode | document | input | iterations | mean |
+| --- | --- | --- | ---: | ---: | ---: |
+| oldm-turtle | parse to quads | profile | 0.64 kB | 100 | 0.13 ms |
+| oldm-turtle | OLDM parse | profile | 0.64 kB | 100 | 0.22 ms |
+| oldm-n3 | OLDM parse | profile | 0.64 kB | 100 | 0.18 ms |
+| ohm-js 17.5.0 | recognize only | profile | 0.64 kB | 100 | 1.74 ms |
+| ohm-js 18 beta | recognize only | profile | 0.64 kB | 100 | 0.12 ms |
+| oldm-turtle | parse to quads | preferences | 0.58 kB | 100 | 0.04 ms |
+| oldm-turtle | OLDM parse | preferences | 0.58 kB | 100 | 0.07 ms |
+| oldm-n3 | OLDM parse | preferences | 0.58 kB | 100 | 0.06 ms |
+| ohm-js 17.5.0 | recognize only | preferences | 0.58 kB | 100 | 1.28 ms |
+| ohm-js 18 beta | recognize only | preferences | 0.58 kB | 100 | 0.08 ms |
+| oldm-turtle | parse to quads | 20 contacts | 3.00 kB | 100 | 0.15 ms |
+| oldm-turtle | OLDM parse | 20 contacts | 3.00 kB | 100 | 0.47 ms |
+| oldm-n3 | OLDM parse | 20 contacts | 3.00 kB | 100 | 0.53 ms |
+| ohm-js 17.5.0 | recognize only | 20 contacts | 3.00 kB | 100 | 9.13 ms |
+| ohm-js 18 beta | recognize only | 20 contacts | 3.00 kB | 100 | 0.42 ms |
+| oldm-turtle | parse to quads | 200 contacts | 29.76 kB | 20 | 1.22 ms |
+| oldm-turtle | OLDM parse | 200 contacts | 29.76 kB | 20 | 4.66 ms |
+| oldm-n3 | OLDM parse | 200 contacts | 29.76 kB | 20 | 5.00 ms |
+| ohm-js 17.5.0 | recognize only | 200 contacts | 29.76 kB | 20 | 130.12 ms |
+| ohm-js 18 beta | recognize only | 200 contacts | 29.76 kB | 20 | 4.39 ms |
+
+### Initial interpretation
+
+Ohm.js 18 changes the performance picture dramatically compared with Ohm.js 17. In this recognition-only benchmark it is roughly in the same broad range as OLDM parsing for these small Solid-style files, while Ohm.js 17 remains much too slow.
+
+However, this does **not** yet mean that OLDM should switch to Ohm. The handwritten parser already parses to quads, while the Ohm rows only recognize syntax. The next useful experiment is to add a CST walker for the Ohm v18 recognizer and measure end-to-end parse-to-quads performance and code size.
+
+A reasonable decision rule:
+
+```text
+Keep the handwritten parser unless an Ohm v18 backend:
+- passes the same Turtle subset tests,
+- builds the same quads,
+- stays within roughly 2x of handwritten parse-to-quads time on 1-50 kB Solid files,
+- keeps shipped runtime + wasm size acceptable,
+- and makes the grammar/implementation clearly easier to maintain.
+```

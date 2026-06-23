@@ -35,3 +35,17 @@ Known limits in this experimental version:
 - no streaming input or output
 - no TriG, N-Quads, N3 rules, RDF-star, or RDF 1.2 extensions
 - escaping and prefixed-name validation are intentionally conservative
+
+## Ohm.js experiment
+
+The repository also contains an experimental Ohm.js Turtle recognizer in `packages/oldm-turtle/experimental/`.
+
+It is not exported by this package and is not included in the published files. It is only there to benchmark whether Ohm.js 18's WebAssembly backend is fast enough to consider for a future parser backend.
+
+From the workspace root:
+
+```sh
+npm run benchmark:turtle:ohm
+```
+
+The Ohm benchmark is recognition-only; it does not yet build OLDM quads.
