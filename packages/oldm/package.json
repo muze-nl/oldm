@@ -7,13 +7,19 @@
   "exports": {
     ".": "./src/index.mjs",
     "./dist/oldm.js": "./dist/oldm.js",
-    "./dist/oldm.min.js": "./dist/oldm.min.js"
+    "./dist/oldm.min.js": "./dist/oldm.min.js",
+    "./dist/oldm.global.js": "./dist/oldm.global.js",
+    "./dist/oldm.global.min.js": "./dist/oldm.global.min.js"
   },
   "scripts": {
     "test": "tap --disable-coverage test/*.mjs",
     "coverage": "tap --allow-incomplete-coverage --show-full-coverage test/*.mjs",
-    "build-dev": "esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.js --format=esm",
-    "build": "esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.min.js --format=esm --minify"
+    "build-dev": "npm run build:esm-dev && npm run build:iife-dev",
+    "build": "npm run build:esm && npm run build:iife",
+    "build:esm-dev": "esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.js --format=esm",
+    "build:esm": "esbuild src/index.mjs --bundle --sourcemap --outfile=dist/oldm.min.js --format=esm --minify",
+    "build:iife-dev": "esbuild src/global.mjs --bundle --sourcemap --outfile=dist/oldm.global.js --format=iife",
+    "build:iife": "esbuild src/global.mjs --bundle --sourcemap --outfile=dist/oldm.global.min.js --format=iife --minify"
   },
   "repository": {
     "type": "git",

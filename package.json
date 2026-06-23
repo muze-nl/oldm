@@ -11,7 +11,8 @@
     "test": "npm run test --workspaces --if-present",
     "coverage": "npm run coverage --workspaces --if-present",
     "build-dev": "npm run build-dev --workspace @muze-nl/oldm",
-    "build": "npm run build --workspace @muze-nl/oldm"
+    "build": "npm run build --workspace @muze-nl/oldm",
+    "compare:turtle": "node scripts/compare-turtle.mjs"
   },
   "repository": {
     "type": "git",

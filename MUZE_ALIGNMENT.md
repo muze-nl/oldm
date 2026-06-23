@@ -53,7 +53,7 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Status:** Partly addressed
 
-**Note:** The package is now split so `@muze-nl/oldm-core` has no direct N3 dependency and the N3 integration lives in `@muze-nl/oldm-n3`. The beginner package still uses N3 by default, so a fully import-map-compatible Turtle adapter remains a future improvement.
+**Note:** The package is now split so `@muze-nl/oldm-core` has no direct N3 dependency and the N3 integration lives in `@muze-nl/oldm-n3`. The beginner package now publishes both ESM bundles and a classic global IIFE bundle, so plain script-tag usage is supported again. The beginner package still uses N3 by default, so a fully import-map-compatible Turtle adapter remains a future improvement.
 
 ### 2. Document semantic tradeoffs of object mapping
 
@@ -65,7 +65,9 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 
 **Suggested direction:** Add a “What is preserved / what is simplified” section. Include examples of cycles, one-or-many values, literals with types/languages, and subject identity.
 
-**Status:** Open
+**Status:** Partly addressed
+
+**Note:** `Context` now keeps a registry of parsed graphs, exposes a combined read view, provides `context.sources(subject, predicate, value)` for provenance inspection, supports source-aware write helpers through `graph.set/add/delete()` and `context.set/add/delete(..., { graph })`, and routes direct property assignment on named subjects from `context.get(...)` through the same conservative graph resolver. Blank nodes remain graph-scoped and collection mutation is still intentionally conservative.
 
 ### 3. Separate core graph/object mapping from parser/writer adapters
 
@@ -108,3 +110,8 @@ OLDM is aligned with Muze’s sovereign-web goals because it tries to make Linke
 ## Review cadence
 
 Review this document before feature work, before releases, and whenever the public API or dependency surface changes. Close issues by changing their status to `Done` and leaving a short note about the decision.
+
+
+## Experimental Turtle adapter
+
+The repository now contains `@muze-labs/oldm-turtle`, an experimental non-streaming Turtle 1.1 parser/writer adapter. It is a better long-term fit for Muze principles than the broad N3 dependency, but it is not the default yet. The current investigation shows a substantial browser bundle reduction if it replaces N3, while small Solid-style parse/write performance is roughly comparable. See `docs/TURTLE_PARSER_INVESTIGATION.md`.
