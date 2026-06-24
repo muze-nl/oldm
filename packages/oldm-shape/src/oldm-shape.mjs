@@ -306,133 +306,164 @@ function describeShapeField(key, pattern, ctx)
 	})
 }
 
+const metaDescriptorRegistry = new Map()
+const patternDescriptorRegistry = []
+
+function registerMetaDescriptor(kind, handler)
+{
+	metaDescriptorRegistry.set(kind, handler)
+}
+
+function registerPatternDescriptor(test, handler)
+{
+	patternDescriptorRegistry.push({ test, handler })
+}
+
+registerMetaDescriptor('shape', (pattern, meta, ctx) => describeShape(meta, ctx))
+
+registerMetaDescriptor('optional', describeWrapperPattern)
+registerMetaDescriptor('required', describeWrapperPattern)
+
+registerMetaDescriptor('field', (pattern, meta, ctx) => withPortable({
+	kind: 'field-pattern',
+	predicate: meta.predicate,
+	value: describePattern(meta.pattern, ctx)
+}))
+
+registerMetaDescriptor('id', (pattern, meta, ctx) => withPortable({
+	kind: 'id-pattern',
+	value: describePattern(meta.pattern, ctx)
+}))
+
+registerMetaDescriptor('uri', (pattern, meta, ctx) => {
+	const descriptor = {
+		kind: 'uri'
+	}
+	if (meta.pattern && meta.pattern !== looksLikeURI) {
+		descriptor.value = describePattern(meta.pattern, ctx)
+	}
+	return withPortable(descriptor)
+})
+
+registerMetaDescriptor('typed', (pattern, meta, ctx) => withPortable({
+	kind: 'typed',
+	datatype: meta.datatype,
+	value: describePattern(meta.pattern, ctx)
+}))
+
+registerMetaDescriptor('node', (pattern, meta, ctx) => withPortable({
+	kind: 'node',
+	shape: describePattern(meta.shape, ctx)
+}))
+
+registerMetaDescriptor('collection', (pattern, meta, ctx) => withPortable({
+	kind: 'collection',
+	ordered: true,
+	item: describePattern(meta.pattern, ctx)
+}))
+
+registerPatternDescriptor(Array.isArray, describeArrayPattern)
+registerPatternDescriptor(pattern => pattern === String, () => literalDescriptor('string'))
+registerPatternDescriptor(pattern => pattern === Number, () => literalDescriptor('number'))
+registerPatternDescriptor(pattern => pattern === Boolean, () => literalDescriptor('boolean'))
+registerPatternDescriptor(pattern => pattern instanceof RegExp, describeRegExpPattern)
+registerPatternDescriptor(isPlainObject, describeObjectPattern)
+registerPatternDescriptor(pattern => typeof pattern == 'function', describeFunctionPattern)
+registerPatternDescriptor(pattern => pattern == null || isJSONValue(pattern), describeConstantPattern)
+
 function describePattern(pattern, ctx)
 {
 	const meta = rootMeta(pattern)
-
-	if (meta?.kind == 'shape') {
-		return describeShape(meta, ctx)
-	}
-	if (meta?.kind == 'optional' || meta?.kind == 'required') {
-		return withPortable({
-			kind: meta.kind,
-			value: describePattern(meta.pattern, ctx)
-		})
-	}
-	if (meta?.kind == 'field') {
-		return withPortable({
-			kind: 'field-pattern',
-			predicate: meta.predicate,
-			value: describePattern(meta.pattern, ctx)
-		})
-	}
-	if (meta?.kind == 'id') {
-		return withPortable({
-			kind: 'id-pattern',
-			value: describePattern(meta.pattern, ctx)
-		})
-	}
-	if (meta?.kind == 'uri') {
-		const descriptor = {
-			kind: 'uri'
+	if (meta) {
+		const handler = metaDescriptorRegistry.get(meta.kind)
+		if (handler) {
+			return handler(pattern, meta, ctx)
 		}
-		if (meta.pattern && meta.pattern !== looksLikeURI) {
-			descriptor.value = describePattern(meta.pattern, ctx)
-		}
-		return withPortable(descriptor)
-	}
-	if (meta?.kind == 'typed') {
-		return withPortable({
-			kind: 'typed',
-			datatype: meta.datatype,
-			value: describePattern(meta.pattern, ctx)
-		})
-	}
-	if (meta?.kind == 'node') {
-		return withPortable({
-			kind: 'node',
-			shape: describePattern(meta.shape, ctx)
-		})
-	}
-	if (meta?.kind == 'collection') {
-		return withPortable({
-			kind: 'collection',
-			ordered: true,
-			item: describePattern(meta.pattern, ctx)
-		})
 	}
 
-	if (Array.isArray(pattern)) {
-		if (pattern.length == 1) {
-			return withPortable({
-				kind: 'array',
-				item: describePattern(pattern[0], ctx)
-			})
-		}
-		return {
-			kind: 'tuple',
-			items: pattern.map(item => describePattern(item, ctx)),
-			portable: false
+	for (const { test, handler } of patternDescriptorRegistry) {
+		if (test(pattern)) {
+			return handler(pattern, ctx)
 		}
 	}
-	if (pattern === String) {
-		return {
-			kind: 'literal',
-			type: 'string',
-			portable: true
-		}
-	}
-	if (pattern === Number) {
-		return {
-			kind: 'literal',
-			type: 'number',
-			portable: true
-		}
-	}
-	if (pattern === Boolean) {
-		return {
-			kind: 'literal',
-			type: 'boolean',
-			portable: true
-		}
-	}
-	if (pattern instanceof RegExp) {
-		return {
-			kind: 'regexp',
-			source: pattern.source,
-			flags: pattern.flags,
-			portable: true
-		}
-	}
-	if (isPlainObject(pattern)) {
-		const fields = {}
-		for (const [key, value] of Object.entries(pattern)) {
-			fields[key] = describePattern(value, ctx)
-		}
-		return {
-			kind: 'object',
-			fields,
-			portable: fieldsPortable(fields)
-		}
-	}
-	if (typeof pattern == 'function') {
-		return {
-			kind: 'custom',
-			name: pattern.name || null,
-			portable: false
-		}
-	}
-	if (pattern == null || isJSONValue(pattern)) {
-		return {
-			kind: 'constant',
-			value: pattern,
-			portable: true
-		}
-	}
+
 	return {
 		kind: 'unknown',
 		name: Object.prototype.toString.call(pattern),
 		portable: false
+	}
+}
+
+function describeWrapperPattern(pattern, meta, ctx)
+{
+	return withPortable({
+		kind: meta.kind,
+		value: describePattern(meta.pattern, ctx)
+	})
+}
+
+function describeArrayPattern(pattern, ctx)
+{
+	if (pattern.length == 1) {
+		return withPortable({
+			kind: 'array',
+			item: describePattern(pattern[0], ctx)
+		})
+	}
+	return {
+		kind: 'tuple',
+		items: pattern.map(item => describePattern(item, ctx)),
+		portable: false
+	}
+}
+
+function literalDescriptor(type)
+{
+	return {
+		kind: 'literal',
+		type,
+		portable: true
+	}
+}
+
+function describeRegExpPattern(pattern)
+{
+	return {
+		kind: 'regexp',
+		source: pattern.source,
+		flags: pattern.flags,
+		portable: true
+	}
+}
+
+function describeObjectPattern(pattern, ctx)
+{
+	const fields = {}
+	for (const [key, value] of Object.entries(pattern)) {
+		fields[key] = describePattern(value, ctx)
+	}
+	return {
+		kind: 'object',
+		fields,
+		portable: fieldsPortable(fields)
+	}
+}
+
+function describeFunctionPattern(pattern)
+{
+	return {
+		kind: 'custom',
+		name: pattern.name || null,
+		portable: false
+	}
+}
+
+function describeConstantPattern(pattern)
+{
+	return {
+		kind: 'constant',
+		value: pattern,
+		portable: true
 	}
 }
 
