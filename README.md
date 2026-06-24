@@ -9,6 +9,7 @@ OLDM is now structured as a small npm-workspaces monorepo. The split keeps the c
 | `@muze-nl/oldm-core` | Core object/graph mapping, helpers, and classes. Explicit ESM exports only. No N3 dependency and no global side effects. |
 | `@muze-nl/oldm-n3` | N3 parser/writer adapter for OLDM. Depends on `n3` and `@muze-nl/oldm-core`. |
 | `@muze-nl/oldm` | Beginner-friendly package. Exports one default `oldm` object, provides default N3 parser/writer wiring, browser bundles, and sets `globalThis.oldm`. |
+| `@muze-labs/oldm-shape` | Experimental assert-style object shapes for validating JavaScript objects and mapping them to and from OLDM objects. |
 
 ## Installation
 
@@ -38,6 +39,12 @@ const context = oldm({
   parser: n3Parser,
   writer: n3Writer
 })
+```
+
+For experimental object shapes:
+
+```shell
+npm install @muze-labs/oldm-shape @muze-nl/oldm-core @muze-nl/assert
 ```
 
 
