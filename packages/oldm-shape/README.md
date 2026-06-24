@@ -21,6 +21,7 @@ import oldm, { Graph } from '@muze-nl/oldm-core'
 import {
 	Optional,
 	collection,
+	describe,
 	field,
 	id,
 	node,
@@ -75,8 +76,88 @@ subject.vcard$fn
 subject.vcard$hasEmail.vcard$value.id
 // 'mailto:auke@example.org'
 
-const plainObject = Contact.fromOldm(subject)
+const descriptor = describe(Contact)
+// or: Contact.describe()
 ```
+
+## Describing shapes
+
+`describe(shapeOrPattern)` returns a plain data descriptor for a shape or pattern.
+This is the public introspection API for tools that need to inspect a shape
+without depending on oldm-shape's private metadata.
+
+The descriptor is meant to be useful for later packages such as form generators,
+SHACL exporters, JSON Schema/OpenAPI adapters, and storage-schema mappers.
+
+```js
+const descriptor = describe(Contact)
+
+// simplified result:
+{
+	kind: 'shape',
+	type: 'vcard$Individual',
+	portable: true,
+	fields: {
+		id: {
+			kind: 'id',
+			key: 'id',
+			required: true,
+			optional: false,
+			cardinality: { min: 1, max: 1 },
+			value: { kind: 'uri', portable: true },
+			portable: true
+		},
+		name: {
+			kind: 'field',
+			key: 'name',
+			predicate: 'vcard$fn',
+			required: true,
+			optional: false,
+			cardinality: { min: 1, max: 1 },
+			value: { kind: 'literal', type: 'string', portable: true },
+			portable: true
+		},
+		nickname: {
+			kind: 'field',
+			key: 'nickname',
+			predicate: 'vcard$nickname',
+			required: false,
+			optional: true,
+			cardinality: { min: 0, max: 1 },
+			value: { kind: 'literal', type: 'string', portable: true },
+			portable: true
+		}
+	}
+}
+```
+
+A shape function also exposes the same descriptor through `.describe()`.
+
+```js
+Contact.describe()
+```
+
+Descriptors mark whether the pattern is portable. Built-in oldm-shape patterns
+such as `field()`, `id()`, `uri()`, `typed()`, `node()`, `collection()`,
+`Optional()`, `Required()`, JavaScript primitive constructors, regular
+expressions, and one-item array patterns are portable. Arbitrary JavaScript
+validator functions are still allowed for validation, but are described as
+custom non-portable patterns so schema converters can fail clearly instead of
+guessing.
+
+```js
+const Custom = shape('ex$Thing', {
+	name: field('ex$name', value => value ? false : 'missing')
+})
+
+describe(Custom).fields.name.value
+// { kind: 'custom', name: null, portable: false }
+```
+
+This package deliberately only describes the shape. Backend-specific decisions
+such as table names, join tables, indexes, migrations, or whether nested nodes
+become child tables or JSON columns should live in a separate mapping/profile
+layer.
 
 ## Prefixes
 
@@ -164,6 +245,20 @@ Contact.toOldm({ ...contact, extra: true }, graph, { extra: 'ignore' })
 ```
 
 ## API
+
+### `describe(shapeOrPattern)`
+
+Returns a plain descriptor for a shape or pattern. Use this when building tools
+on top of oldm-shape instead of reading private metadata from shape functions.
+
+```js
+const descriptor = describe(Contact)
+const sameDescriptor = Contact.describe()
+```
+
+The descriptor includes shape type, field keys, RDF predicates, id fields,
+required/optional state, cardinality, value kinds, datatypes, nested shapes, and
+`portable` flags.
 
 ### `shape(type?, fields, options?)`
 

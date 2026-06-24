@@ -5,6 +5,7 @@ import {
 	Optional,
 	Required,
 	collection,
+	describe,
 	field,
 	id,
 	node,
@@ -65,6 +66,84 @@ tap.test('shape works as an assert-compatible validator', t => {
 	t.notOk(Contact.fails({...contact, extra: true}))
 	t.ok(Contact.fails({...contact, extra: true}, { extra: 'error' }))
 
+	t.end()
+})
+
+
+
+tap.test('describe exposes a stable data-only shape descriptor', t => {
+	const descriptor = describe(Contact)
+
+	t.equal(descriptor.kind, 'shape')
+	t.equal(descriptor.type, 'vcard$Individual')
+	t.equal(descriptor.portable, true)
+
+	t.same(descriptor.fields.id, {
+		kind: 'id',
+		key: 'id',
+		required: true,
+		optional: false,
+		cardinality: { min: 1, max: 1 },
+		value: {
+			kind: 'uri',
+			portable: true
+		},
+		portable: true
+	})
+
+	t.same(descriptor.fields.name, {
+		kind: 'field',
+		key: 'name',
+		predicate: 'vcard$fn',
+		required: true,
+		optional: false,
+		cardinality: { min: 1, max: 1 },
+		value: {
+			kind: 'literal',
+			type: 'string',
+			portable: true
+		},
+		portable: true
+	})
+
+	t.same(descriptor.fields.nickname, {
+		kind: 'field',
+		key: 'nickname',
+		predicate: 'vcard$nickname',
+		required: false,
+		optional: true,
+		cardinality: { min: 0, max: 1 },
+		value: {
+			kind: 'literal',
+			type: 'string',
+			portable: true
+		},
+		portable: true
+	})
+
+	t.equal(descriptor.fields.birthday.value.kind, 'typed')
+	t.equal(descriptor.fields.birthday.value.datatype, 'xsd$date')
+	t.same(descriptor.fields.birthday.value.value, {
+		kind: 'regexp',
+		source: '^\\d{4}-\\d{2}-\\d{2}$',
+		flags: '',
+		portable: true
+	})
+
+	t.equal(descriptor.fields.email.value.kind, 'node')
+	t.equal(descriptor.fields.email.value.shape.kind, 'shape')
+	t.equal(descriptor.fields.email.value.shape.fields.value.predicate, 'vcard$value')
+
+	t.same(descriptor.fields.knows.cardinality, { min: 0, max: null })
+	t.equal(descriptor.fields.knows.value.kind, 'array')
+	t.equal(descriptor.fields.knows.value.item.kind, 'uri')
+
+	t.same(descriptor.fields.topics.cardinality, { min: 0, max: null })
+	t.equal(descriptor.fields.topics.value.kind, 'collection')
+	t.equal(descriptor.fields.topics.value.item.type, 'string')
+
+	t.same(Contact.describe(), descriptor)
+	t.same(describe(String), { kind: 'literal', type: 'string', portable: true })
 	t.end()
 })
 

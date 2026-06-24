@@ -60,6 +60,7 @@ export function shape(type, fields, options={})
 		}
 		return data
 	}
+	_shape.describe = () => describe(_shape)
 	_shape.toOldm = (data, graph, convertOptions={}) => toOldm(info, data, graph, convertOptions, idEntry)
 	_shape.fromOldm = (subject, convertOptions={}) => fromOldm(info, subject, convertOptions)
 
@@ -216,6 +217,342 @@ export function isShape(value)
 export function isDescriptor(value)
 {
 	return Boolean(rootMeta(value))
+}
+
+
+/**
+ * Returns a plain descriptor for a shape or pattern.
+ *
+ * The descriptor is intentionally data-only. It exposes the mapping metadata
+ * that converters, form generators, and schema exporters need without making
+ * them depend on the private metadata symbol used internally by oldm-shape.
+ */
+export function describe(value)
+{
+	const descriptor = describePattern(value, { seen: new Map() })
+	if (!descriptor) {
+		throw new Error('describe() expects an oldm-shape shape or pattern')
+	}
+	return descriptor
+}
+
+
+function describeShape(info, ctx)
+{
+	if (ctx.seen.has(info)) {
+		return {
+			kind: 'shape-ref',
+			type: info.type ?? null
+		}
+	}
+
+	ctx.seen.set(info, true)
+	const fields = {}
+	for (const [key, pattern] of Object.entries(info.fields)) {
+		fields[key] = describeShapeField(key, pattern, ctx)
+	}
+	ctx.seen.delete(info)
+
+	const descriptor = {
+		kind: 'shape',
+		type: info.type ?? null,
+		fields,
+		options: describeOptions(info.options)
+	}
+	descriptor.portable = fieldsPortable(fields)
+	return descriptor
+}
+
+function describeShapeField(key, pattern, ctx)
+{
+	const presence = describePresence(pattern)
+	const unwrapped = unwrapWrappers(pattern)
+	const meta = rootMeta(unwrapped)
+
+	if (meta?.kind == 'field') {
+		const value = describePattern(meta.pattern, ctx)
+		return withPortable({
+			kind: 'field',
+			key,
+			predicate: meta.predicate,
+			required: presence.required,
+			optional: presence.optional,
+			cardinality: cardinalityFor(value, presence),
+			value
+		})
+	}
+
+	if (meta?.kind == 'id') {
+		const value = describePattern(meta.pattern, ctx)
+		return withPortable({
+			kind: 'id',
+			key,
+			required: presence.required,
+			optional: presence.optional,
+			cardinality: cardinalityFor(value, presence),
+			value
+		})
+	}
+
+	const value = describePattern(pattern, ctx)
+	return withPortable({
+		kind: 'validator',
+		key,
+		required: presence.required,
+		optional: presence.optional,
+		cardinality: cardinalityFor(value, presence),
+		mapped: false,
+		value
+	})
+}
+
+function describePattern(pattern, ctx)
+{
+	const meta = rootMeta(pattern)
+
+	if (meta?.kind == 'shape') {
+		return describeShape(meta, ctx)
+	}
+	if (meta?.kind == 'optional' || meta?.kind == 'required') {
+		return withPortable({
+			kind: meta.kind,
+			value: describePattern(meta.pattern, ctx)
+		})
+	}
+	if (meta?.kind == 'field') {
+		return withPortable({
+			kind: 'field-pattern',
+			predicate: meta.predicate,
+			value: describePattern(meta.pattern, ctx)
+		})
+	}
+	if (meta?.kind == 'id') {
+		return withPortable({
+			kind: 'id-pattern',
+			value: describePattern(meta.pattern, ctx)
+		})
+	}
+	if (meta?.kind == 'uri') {
+		const descriptor = {
+			kind: 'uri'
+		}
+		if (meta.pattern && meta.pattern !== looksLikeURI) {
+			descriptor.value = describePattern(meta.pattern, ctx)
+		}
+		return withPortable(descriptor)
+	}
+	if (meta?.kind == 'typed') {
+		return withPortable({
+			kind: 'typed',
+			datatype: meta.datatype,
+			value: describePattern(meta.pattern, ctx)
+		})
+	}
+	if (meta?.kind == 'node') {
+		return withPortable({
+			kind: 'node',
+			shape: describePattern(meta.shape, ctx)
+		})
+	}
+	if (meta?.kind == 'collection') {
+		return withPortable({
+			kind: 'collection',
+			ordered: true,
+			item: describePattern(meta.pattern, ctx)
+		})
+	}
+
+	if (Array.isArray(pattern)) {
+		if (pattern.length == 1) {
+			return withPortable({
+				kind: 'array',
+				item: describePattern(pattern[0], ctx)
+			})
+		}
+		return {
+			kind: 'tuple',
+			items: pattern.map(item => describePattern(item, ctx)),
+			portable: false
+		}
+	}
+	if (pattern === String) {
+		return {
+			kind: 'literal',
+			type: 'string',
+			portable: true
+		}
+	}
+	if (pattern === Number) {
+		return {
+			kind: 'literal',
+			type: 'number',
+			portable: true
+		}
+	}
+	if (pattern === Boolean) {
+		return {
+			kind: 'literal',
+			type: 'boolean',
+			portable: true
+		}
+	}
+	if (pattern instanceof RegExp) {
+		return {
+			kind: 'regexp',
+			source: pattern.source,
+			flags: pattern.flags,
+			portable: true
+		}
+	}
+	if (isPlainObject(pattern)) {
+		const fields = {}
+		for (const [key, value] of Object.entries(pattern)) {
+			fields[key] = describePattern(value, ctx)
+		}
+		return {
+			kind: 'object',
+			fields,
+			portable: fieldsPortable(fields)
+		}
+	}
+	if (typeof pattern == 'function') {
+		return {
+			kind: 'custom',
+			name: pattern.name || null,
+			portable: false
+		}
+	}
+	if (pattern == null || isJSONValue(pattern)) {
+		return {
+			kind: 'constant',
+			value: pattern,
+			portable: true
+		}
+	}
+	return {
+		kind: 'unknown',
+		name: Object.prototype.toString.call(pattern),
+		portable: false
+	}
+}
+
+function describePresence(pattern)
+{
+	const meta = rootMeta(pattern)
+	if (meta?.kind == 'optional') {
+		return {
+			optional: true,
+			required: false,
+			explicit: true
+		}
+	}
+	if (meta?.kind == 'required') {
+		return {
+			optional: false,
+			required: true,
+			explicit: true
+		}
+	}
+	return {
+		optional: false,
+		required: true,
+		explicit: false
+	}
+}
+
+function unwrapWrappers(pattern)
+{
+	let result = pattern
+	let meta = rootMeta(result)
+	while (meta?.kind == 'optional' || meta?.kind == 'required') {
+		result = meta.pattern
+		meta = rootMeta(result)
+	}
+	return result
+}
+
+function cardinalityFor(value, presence)
+{
+	return {
+		min: presence.required ? 1 : 0,
+		max: value?.kind == 'array' || value?.kind == 'collection' ? null : 1
+	}
+}
+
+function withPortable(descriptor)
+{
+	descriptor.portable = descriptorPortable(descriptor)
+	return descriptor
+}
+
+function descriptorPortable(descriptor)
+{
+	if (!descriptor) {
+		return false
+	}
+	if (descriptor.portable === false) {
+		return false
+	}
+	if (descriptor.value && descriptor.value.portable === false) {
+		return false
+	}
+	if (descriptor.item && descriptor.item.portable === false) {
+		return false
+	}
+	if (descriptor.shape && descriptor.shape.portable === false) {
+		return false
+	}
+	if (descriptor.fields && !fieldsPortable(descriptor.fields)) {
+		return false
+	}
+	return true
+}
+
+function fieldsPortable(fields)
+{
+	return Object.values(fields).every(field => descriptorPortable(field))
+}
+
+function describeOptions(options)
+{
+	if (!options || !Object.keys(options).length) {
+		return {}
+	}
+	return describeOptionValue(options)
+}
+
+function describeOptionValue(value)
+{
+	if (Array.isArray(value)) {
+		return value.map(describeOptionValue)
+	}
+	if (isPlainObject(value)) {
+		const result = {}
+		for (const [key, item] of Object.entries(value)) {
+			result[key] = describeOptionValue(item)
+		}
+		return result
+	}
+	if (isJSONValue(value)) {
+		return value
+	}
+	if (typeof value == 'function') {
+		return {
+			kind: 'function',
+			name: value.name || null,
+			portable: false
+		}
+	}
+	return {
+		kind: 'value',
+		name: Object.prototype.toString.call(value),
+		portable: false
+	}
+}
+
+function isJSONValue(value)
+{
+	return value === null || ['string', 'number', 'boolean'].includes(typeof value)
 }
 
 function validateShape(data, info, root, path='', options={})
@@ -723,6 +1060,7 @@ export default {
 	collection,
 	Optional,
 	Required,
+	describe,
 	isShape,
 	isDescriptor,
 	assert: assertValue
