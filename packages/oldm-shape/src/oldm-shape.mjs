@@ -32,7 +32,7 @@ export function shape(type, fields, options={})
 	}
 
 	const fieldEntries = Object.entries(fields)
-	const idEntry = fieldEntries.find(([, pattern]) => rootMeta(pattern)?.kind == 'id')
+	const idEntry = fieldEntries.find(([, pattern]) => mappingMeta(pattern)?.kind == 'id')
 	const info = {
 		kind: 'shape',
 		type,
