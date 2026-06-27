@@ -15,6 +15,27 @@ const context = oldm({
 ```
 
 
+## Prefix preference
+
+OLDM shortens predicate and type IRIs with the prefixes configured on the context. Prefix declarations found in Turtle input are parser conveniences; they do not decide the JavaScript property names exposed by OLDM.
+
+When multiple prefixes point at the same namespace, client-provided prefixes are preferred over OLDM defaults, and defaults are preferred over prefixes found in a parsed source document. For example, both `pim:` and `space:` are common aliases for `http://www.w3.org/ns/pim/space#`. Since OLDM prefers `space` for that namespace, profile data using either `pim:storage` or `space:storage` is exposed as `space$storage` in JavaScript.
+
+```javascript
+const context = oldm({
+  parser: n3Parser,
+  prefixes: {
+    space: 'http://www.w3.org/ns/pim/space#'
+  }
+})
+
+const profile = context.parse(turtle, profileUrl, 'text/turtle')
+const me = profile.subjects[`${profileUrl}#me`]
+
+console.log(me.space$storage.id)
+```
+
+
 ## Multiple graphs in one context
 
 `Context` keeps a registry of parsed graphs and exposes a combined view over all graphs loaded into the same context.
@@ -29,14 +50,14 @@ context.graphs                        // parsed graphs in load order
 context.graph(profileUrl)             // graph by source URL
 context.data                          // combined subjects
 context.subjects                      // combined subject map
-profile.context.data                  // same combined view, starting from a graph
-profile.context.subjects              // same combined subject map, starting from a graph
 context.sources(context.get(`${profileUrl}#me`))
 // graphs containing that subject
 context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
 // graphs containing that property
 context.sources(context.get(`${profileUrl}#me`), 'vcard$fn', 'Auke')
 // graphs containing that specific value
+profile.context.data                  // same combined view, starting from a graph
+profile.context.subjects              // same combined subject map, starting from a graph
 ```
 
 The combined context view merges named subjects by IRI. Graph-specific views remain unchanged, so code can still separate data by original resource. Blank nodes remain graph-scoped.

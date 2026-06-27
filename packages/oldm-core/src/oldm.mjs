@@ -183,9 +183,15 @@ export class Context {
 
 	constructor(options)
 	{
-		this.prefixes = {...prefixes, ...options?.prefixes} //FIXME: don't add the same url with different prefixes
-		if (!this.prefixes['xsd']) { //FIXME: don't assume the xsd url always has the 'xsd' prefix
+		const clientPrefixes = options?.prefixes ?? {}
+		this.prefixes = {...prefixes, ...clientPrefixes}
+		this.prefixOrder = [
+			...Object.keys(clientPrefixes),
+			...Object.keys(prefixes).filter(prefix => !(prefix in clientPrefixes))
+		]
+		if (!this.prefixes['xsd']) {
 			this.prefixes['xsd'] = 'http://www.w3.org/2001/XMLSchema#'
+			this.prefixOrder.push('xsd')
 		}
 		this.parser = options?.parser
 		this.writer = options?.writer
@@ -223,6 +229,7 @@ export class Context {
 
 				if (!this.prefixes[prefix]) {
 					this.prefixes[prefix] = prefixURL
+					this.prefixOrder.push(prefix)
 				}
 			}
 		}
@@ -511,7 +518,7 @@ export class Context {
 		if (!separator) {
 			separator = this.separator
 		}
-		for (let prefix in this.prefixes) {
+		for (const prefix of this.prefixOrder) {
 			if (fullURI.startsWith(this.prefixes[prefix])) {
 				return prefix + separator + fullURI.substring(this.prefixes[prefix].length)
 			}
@@ -795,7 +802,12 @@ export class Graph
 		}
 		const [prefix, path] = shortURI.split(separator)
 		if (path) {
-			return this.prefixes[prefix]+path 
+			if (this.context.prefixes[prefix]) {
+				return this.context.prefixes[prefix]+path
+			}
+			if (this.prefixes[prefix]) {
+				return this.prefixes[prefix]+path
+			}
 		}
 		return shortURI
 	}
@@ -805,7 +817,7 @@ export class Graph
 		if (!separator) {
 			separator = this.context.separator
 		}
-		for (let prefix in this.context.prefixes) {
+		for (const prefix of this.context.prefixOrder) {
 			if (fullURI.startsWith(this.context.prefixes[prefix])) {
 				return prefix + separator + fullURI.substring(this.context.prefixes[prefix].length)
 			}

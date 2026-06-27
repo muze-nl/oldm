@@ -761,3 +761,44 @@ tap.test('direct assignment on the combined context view rejects ambiguous graph
 
 	t.end()
 })
+
+tap.test('client prefixes are preferred over source and default aliases when shortening predicates', t => {
+	const space = 'http://www.w3.org/ns/pim/space#'
+	const documentUrl = 'https://example.org/profile/card'
+	const me = `${documentUrl}#me`
+	const storage = 'https://example.org/'
+	const context = oldm({
+		parser() {
+			return {
+				quads: [quad(namedNode(me), namedNode(`${space}storage`), namedNode(storage))],
+				prefixes: {pim: space}
+			}
+		},
+		prefixes: {space}
+	})
+	const graph = context.parse('', documentUrl, 'text/turtle')
+
+	t.equal(graph.subjects[me].space$storage.id, storage)
+	t.equal(graph.subjects[me].pim$storage, undefined)
+	t.equal(context.subjects[me].space$storage.id, storage)
+	t.end()
+})
+
+tap.test('source-only prefixes are still available after client and default prefixes', t => {
+	const custom = 'https://example.org/ns#'
+	const documentUrl = 'https://example.org/data.ttl'
+	const subjectUrl = `${documentUrl}#item`
+	const context = oldm({
+		parser() {
+			return {
+				quads: [quad(namedNode(subjectUrl), namedNode(`${custom}score`), literal('10'))],
+				prefixes: {game: custom}
+			}
+		}
+	})
+	const graph = context.parse('', documentUrl, 'text/turtle')
+
+	t.equal(String(graph.subjects[subjectUrl].game$score), '10')
+	t.equal(String(context.subjects[subjectUrl].game$score), '10')
+	t.end()
+})
