@@ -302,14 +302,19 @@ tap.test('context registers parsed graphs and exposes a combined read view', t =
 	t.equal(context.graph(settingsUrl), settingsGraph)
 	t.equal(context.graphsByUrl[profileUrl], profile)
 	t.equal(context.graphsByUrl[settingsUrl], settingsGraph)
+	t.equal(profile.context, context)
+	t.equal(settingsGraph.context, context)
 
 	t.equal(context.get(profileUrl).id, profileUrl)
+	t.equal(profile.context.get(profileUrl).id, profileUrl)
 	t.equal(String(context.get(profileUrl).vcard$fn), 'Auke')
 	t.equal(context.get(settingsUrl).foaf$primaryTopic.id, profileUrl)
 	const subjects = context.subjects
 	t.equal(subjects[settingsUrl].foaf$primaryTopic, subjects[profileUrl])
 	t.equal(subjects[profileUrl].graph, context)
+	t.equal(profile.context.subjects[profileUrl].graph, context)
 	t.same(context.data.map(subject => subject.id).sort(), [profileUrl, settingsUrl, 'https://issuer.example/'].sort())
+	t.same(profile.context.data.map(subject => subject.id).sort(), context.data.map(subject => subject.id).sort())
 
 	// Graph views stay separate and unchanged.
 	t.equal(profile.get(profileUrl).graph, profile)

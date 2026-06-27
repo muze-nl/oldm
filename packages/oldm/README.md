@@ -39,6 +39,8 @@ context.graphs                        // [profile, settings]
 context.graph(profileUrl)             // profile
 context.data                          // combined subject list
 context.subjects                      // combined subject map by full URI
+profile.context.data                  // same combined view, starting from a graph
+profile.context.subjects              // same combined subject map, starting from a graph
 context.sources(context.get(`${profileUrl}#me`))
 // [profile, settings] when both graphs contain data for that subject
 context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
@@ -46,6 +48,16 @@ context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
 ```
 
 The combined view merges named subjects by IRI and keeps the original graph views separate. `context.sources(subject, predicate, value)` can be used to inspect which graph contributed a subject, property, or specific property value.
+
+If a loader or middleware gives you a `Graph`, use `graph.context` to access the combined view for all graphs loaded into the same context:
+
+```javascript
+const graph = context.parse(profileTurtle, profileUrl, 'text/turtle')
+
+graph.data             // subjects from this one resource
+graph.context.data     // combined subjects from the whole context
+graph.context.get(id)  // merged subject from the whole context
+```
 
 For source-aware writes, use the graph-specific helpers when you know the resource you want to edit:
 

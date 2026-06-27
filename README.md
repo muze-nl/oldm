@@ -9,7 +9,6 @@ OLDM is now structured as a small npm-workspaces monorepo. The split keeps the c
 | `@muze-nl/oldm-core` | Core object/graph mapping, helpers, and classes. Explicit ESM exports only. No N3 dependency and no global side effects. |
 | `@muze-nl/oldm-n3` | N3 parser/writer adapter for OLDM. Depends on `n3` and `@muze-nl/oldm-core`. |
 | `@muze-nl/oldm` | Beginner-friendly package. Exports one default `oldm` object, provides default N3 parser/writer wiring, browser bundles, and sets `globalThis.oldm`. |
-| `@muze-labs/oldm-shape` | Experimental assert-style object shapes for validating JavaScript objects and mapping them to and from OLDM objects. |
 
 ## Installation
 
@@ -41,12 +40,6 @@ const context = oldm({
 })
 ```
 
-For experimental object shapes:
-
-```shell
-npm install @muze-labs/oldm-shape @muze-nl/oldm-core @muze-nl/assert
-```
-
 
 ## Multiple graphs in one context
 
@@ -64,6 +57,8 @@ context.graphs                        // [profile, settings]
 context.graph(profileUrl)             // profile
 context.data                          // combined subject list
 context.subjects                      // combined subject map by full URI
+profile.context.data                  // same combined view, starting from a graph
+profile.context.subjects              // same combined subject map, starting from a graph
 context.sources(context.get(`${profileUrl}#me`))
 // [profile, settings] when both graphs contain data for that subject
 context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
@@ -71,6 +66,16 @@ context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
 ```
 
 The combined view merges named subjects by IRI and keeps the original graph views separate. `context.sources(subject, predicate, value)` can be used to inspect which graph contributed a subject, property, or specific property value.
+
+If a loader or middleware gives you a `Graph`, use `graph.context` to access the combined view for all graphs loaded into the same context:
+
+```javascript
+const graph = context.parse(profileTurtle, profileUrl, 'text/turtle')
+
+graph.data             // subjects from this one resource
+graph.context.data     // combined subjects from the whole context
+graph.context.get(id)  // merged subject from the whole context
+```
 
 For source-aware writes, use the graph-specific helpers when you know the resource you want to edit:
 

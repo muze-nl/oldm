@@ -29,6 +29,8 @@ context.graphs                        // parsed graphs in load order
 context.graph(profileUrl)             // graph by source URL
 context.data                          // combined subjects
 context.subjects                      // combined subject map
+profile.context.data                  // same combined view, starting from a graph
+profile.context.subjects              // same combined subject map, starting from a graph
 context.sources(context.get(`${profileUrl}#me`))
 // graphs containing that subject
 context.sources(context.get(`${profileUrl}#me`), 'vcard$fn')
@@ -38,6 +40,16 @@ context.sources(context.get(`${profileUrl}#me`), 'vcard$fn', 'Auke')
 ```
 
 The combined context view merges named subjects by IRI. Graph-specific views remain unchanged, so code can still separate data by original resource. Blank nodes remain graph-scoped.
+
+If a loader or middleware gives you a `Graph`, use `graph.context` to access the combined view for all graphs loaded into the same context:
+
+```javascript
+const graph = context.parse(profileTurtle, profileUrl, 'text/turtle')
+
+graph.data             // subjects from this one resource
+graph.context.data     // combined subjects from the whole context
+graph.context.get(id)  // merged subject from the whole context
+```
 
 For source-aware writes, use the graph-specific helpers when you know the resource you want to edit:
 
