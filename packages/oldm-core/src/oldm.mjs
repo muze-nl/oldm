@@ -195,6 +195,7 @@ export class Context {
 		}
 		this.parser = options?.parser
 		this.writer = options?.writer
+		this.patchWriter = options?.patchWriter
 		this.graphs = []
 		this.graphsByUrl = Object.create(null)
 		this.defaultGraph = options?.defaultGraph ?? null
@@ -233,7 +234,7 @@ export class Context {
 				}
 			}
 		}
-		return this.addGraph(new Graph(quads, url, type, prefixes, this))
+		return this.addGraph(new Graph(quads, url, type, prefixes, this, input))
 	}
 
 	addGraph(graph)
@@ -556,12 +557,13 @@ export class Graph
 {
 	#blankNodes = Object.create(null)
 
-	constructor(quads, url, mimetype, prefixes, context)
+	constructor(quads, url, mimetype, prefixes, context, originalSource=null)
 	{
 		this.mimetype = mimetype
 		this.url      = url
 		this.prefixes = prefixes
 		this.context  = context
+		this.originalSource = originalSource
 		this.subjects = Object.create(null)
 		for (let quad of quads) {
 			let subject
@@ -632,6 +634,14 @@ export class Graph
 	write()
 	{
 		return this.context.writer(this)
+	}
+
+	patch()
+	{
+		if (!this.context.patchWriter) {
+			throw new Error('Cannot generate a patch without a configured patchWriter')
+		}
+		return this.context.patchWriter(this)
 	}
 
 	get(shortID)

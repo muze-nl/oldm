@@ -6,11 +6,12 @@ This package contains the object/graph mapping layer only. It has explicit ESM e
 
 ```javascript
 import oldm, { one, many, first, Collection } from '@muze-nl/oldm-core'
-import { n3Parser, n3Writer } from '@muze-nl/oldm-n3'
+import { n3Parser, n3PatchWriter, n3Writer } from '@muze-nl/oldm-n3'
 
 const context = oldm({
   parser: n3Parser,
-  writer: n3Writer
+  writer: n3Writer,
+  patchWriter: n3PatchWriter
 })
 ```
 
@@ -96,6 +97,10 @@ delete me.vcard$nickname
 ```
 
 If there is no obvious source graph, OLDM throws and asks you to choose one explicitly with `context.set/add/delete(..., { graph })` or `graph.set/add/delete(...)`.
+
+## PATCH output
+
+`Graph#patch()` delegates to the configured `patchWriter`, just like `Graph#write()` delegates to `writer`. Core stays parser/writer agnostic; use `n3PatchWriter` from `@muze-nl/oldm-n3` when you want Solid N3 Patch output.
 
 ## Public exports
 

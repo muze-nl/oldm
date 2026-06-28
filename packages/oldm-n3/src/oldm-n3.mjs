@@ -1,6 +1,8 @@
 import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 import { Parser, Writer, DataFactory } from 'n3'
 
+const solidNamespace = 'http://www.w3.org/ns/solid/terms#'
+
 export const n3Parser = (input, uri, type) => {
 	const parser = new Parser({
         baseIRI: uri,
@@ -192,4 +194,122 @@ export const n3Writer = (source) => {
 			}
 		})
 	})
+}
+
+export const n3PatchWriter = async (source) => {
+	if (source.originalSource == null) {
+		throw new Error('Cannot generate a patch without the original graph source')
+	}
+
+	const currentSource = await n3Writer(source)
+	const original = n3Parser(source.originalSource, source.url, source.mimetype).quads
+	const current = n3Parser(currentSource, source.url, source.mimetype).quads
+	const {inserts, deletes} = diffQuads(original, current)
+
+	assertPatchable(inserts, 'insert')
+	assertPatchable(deletes, 'delete')
+
+	return serializePatch(source, inserts, deletes)
+}
+
+function diffQuads(original, current)
+{
+	const originalByKey = new Map(original.map(quad => [quadKey(quad), quad]))
+	const currentByKey = new Map(current.map(quad => [quadKey(quad), quad]))
+
+	const deletes = []
+	const inserts = []
+	for (const [key, quad] of originalByKey) {
+		if (!currentByKey.has(key)) {
+			deletes.push(quad)
+		}
+	}
+	for (const [key, quad] of currentByKey) {
+		if (!originalByKey.has(key)) {
+			inserts.push(quad)
+		}
+	}
+	return {inserts, deletes}
+}
+
+function quadKey(quad)
+{
+	return [
+		termKey(quad.subject),
+		termKey(quad.predicate),
+		termKey(quad.object),
+		termKey(quad.graph)
+	].join(' ')
+}
+
+function termKey(term)
+{
+	if (!term) {
+		return ''
+	}
+	if (term.termType == 'Literal') {
+		return [
+			'Literal',
+			term.value,
+			term.language ?? '',
+			term.datatype?.value ?? term.datatype?.id ?? ''
+		].join('\u0000')
+	}
+	return `${term.termType}\u0000${term.value ?? term.id ?? ''}`
+}
+
+function assertPatchable(quads, operation)
+{
+	const hasBlankNode = quads.some(quad =>
+		quad.subject.termType == 'BlankNode'
+		|| quad.predicate.termType == 'BlankNode'
+		|| quad.object.termType == 'BlankNode'
+	)
+	if (hasBlankNode) {
+		throw new Error(`Cannot generate a Solid PATCH with blank nodes in ${operation} changes; use graph.write() and PUT instead`)
+	}
+}
+
+function serializePatch(source, inserts, deletes)
+{
+	const prefixes = {
+		...(source.prefixes ?? {}),
+		solid: solidNamespace
+	}
+	const writer = new Writer({
+		format: 'text/turtle',
+		prefixes
+	})
+	const lines = []
+	for (const [prefix, iri] of Object.entries(prefixes)) {
+		lines.push(`@prefix ${prefix}: <${iri}> .`)
+	}
+	if (lines.length) {
+		lines.push('')
+	}
+
+	const predicates = []
+	if (deletes.length) {
+		predicates.push(`solid:deletes ${formula(writer, deletes)}`)
+	}
+	if (inserts.length) {
+		predicates.push(`solid:inserts ${formula(writer, inserts)}`)
+	}
+
+	let patch = `_:patch a solid:InsertDeletePatch`
+	if (predicates.length) {
+		patch += ';\n\t' + predicates.join(';\n\t')
+	}
+	lines.push(`${patch} .`)
+
+	return lines.join('\n')+"\n"
+}
+
+function formula(writer, quads)
+{
+	if (!quads.length) {
+		return '{}'
+	}
+	const lines = quads.map(quad => `\n\t\t${writer.quadToString(quad.subject, quad.predicate, quad.object).trim()}`)
+	return `{${lines.join('')}\n\t}`
 }

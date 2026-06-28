@@ -8,13 +8,15 @@ const oldm = {
 		const {
 			parser = n3Module.n3Parser,
 			writer = n3Module.n3Writer,
+			patchWriter = n3Module.n3PatchWriter,
 			...contextOptions
 		} = options
 
 		return oldmCore({
 			...contextOptions,
 			parser,
-			writer
+			writer,
+			patchWriter
 		})
 	},
 	...core,

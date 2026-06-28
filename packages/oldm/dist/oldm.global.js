@@ -2072,12 +2072,19 @@
   var Context = class {
     #buildingSubjects = false;
     constructor(options) {
-      this.prefixes = { ...prefixes, ...options?.prefixes };
+      const clientPrefixes = options?.prefixes ?? {};
+      this.prefixes = { ...prefixes, ...clientPrefixes };
+      this.prefixOrder = [
+        ...Object.keys(clientPrefixes),
+        ...Object.keys(prefixes).filter((prefix) => !(prefix in clientPrefixes))
+      ];
       if (!this.prefixes["xsd"]) {
         this.prefixes["xsd"] = "http://www.w3.org/2001/XMLSchema#";
+        this.prefixOrder.push("xsd");
       }
       this.parser = options?.parser;
       this.writer = options?.writer;
+      this.patchWriter = options?.patchWriter;
       this.graphs = [];
       this.graphsByUrl = /* @__PURE__ */ Object.create(null);
       this.defaultGraph = options?.defaultGraph ?? null;
@@ -2108,10 +2115,11 @@
             }
           if (!this.prefixes[prefix]) {
             this.prefixes[prefix] = prefixURL;
+            this.prefixOrder.push(prefix);
           }
         }
       }
-      return this.addGraph(new Graph(quads, url, type, prefixes2, this));
+      return this.addGraph(new Graph(quads, url, type, prefixes2, this, input));
     }
     addGraph(graph) {
       if (!graph?.url) {
@@ -2335,7 +2343,7 @@
       if (!separator) {
         separator = this.separator;
       }
-      for (let prefix in this.prefixes) {
+      for (const prefix of this.prefixOrder) {
         if (fullURI.startsWith(this.prefixes[prefix])) {
           return prefix + separator + fullURI.substring(this.prefixes[prefix].length);
         }
@@ -2366,11 +2374,12 @@
   };
   var Graph = class {
     #blankNodes = /* @__PURE__ */ Object.create(null);
-    constructor(quads, url, mimetype, prefixes2, context) {
+    constructor(quads, url, mimetype, prefixes2, context, originalSource = null) {
       this.mimetype = mimetype;
       this.url = url;
       this.prefixes = prefixes2;
       this.context = context;
+      this.originalSource = originalSource;
       this.subjects = /* @__PURE__ */ Object.create(null);
       for (let quad2 of quads) {
         let subject;
@@ -2432,6 +2441,12 @@
     }
     write() {
       return this.context.writer(this);
+    }
+    patch() {
+      if (!this.context.patchWriter) {
+        throw new Error("Cannot generate a patch without a configured patchWriter");
+      }
+      return this.context.patchWriter(this);
     }
     get(shortID) {
       return this.subjects[this.fullURI(shortID)];
@@ -2564,7 +2579,12 @@
       }
       const [prefix, path] = shortURI.split(separator);
       if (path) {
-        return this.prefixes[prefix] + path;
+        if (this.context.prefixes[prefix]) {
+          return this.context.prefixes[prefix] + path;
+        }
+        if (this.prefixes[prefix]) {
+          return this.prefixes[prefix] + path;
+        }
       }
       return shortURI;
     }
@@ -2572,7 +2592,7 @@
       if (!separator) {
         separator = this.context.separator;
       }
-      for (let prefix in this.context.prefixes) {
+      for (const prefix of this.context.prefixOrder) {
         if (fullURI.startsWith(this.context.prefixes[prefix])) {
           return prefix + separator + fullURI.substring(this.context.prefixes[prefix].length);
         }
@@ -2695,6 +2715,7 @@
   var oldm_n3_exports = {};
   __export(oldm_n3_exports, {
     n3Parser: () => n3Parser,
+    n3PatchWriter: () => n3PatchWriter,
     n3Writer: () => n3Writer
   });
 
@@ -4874,6 +4895,7 @@
   }
 
   // ../oldm-n3/src/oldm-n3.mjs
+  var solidNamespace = "http://www.w3.org/ns/solid/terms#";
   var n3Parser = (input, uri, type) => {
     const parser = new N3Parser({
       baseIRI: uri,
@@ -5030,6 +5052,104 @@
       });
     });
   };
+  var n3PatchWriter = async (source) => {
+    if (source.originalSource == null) {
+      throw new Error("Cannot generate a patch without the original graph source");
+    }
+    const currentSource = await n3Writer(source);
+    const original = n3Parser(source.originalSource, source.url, source.mimetype).quads;
+    const current = n3Parser(currentSource, source.url, source.mimetype).quads;
+    const { inserts, deletes } = diffQuads(original, current);
+    assertPatchable(inserts, "insert");
+    assertPatchable(deletes, "delete");
+    return serializePatch(source, inserts, deletes);
+  };
+  function diffQuads(original, current) {
+    const originalByKey = new Map(original.map((quad2) => [quadKey(quad2), quad2]));
+    const currentByKey = new Map(current.map((quad2) => [quadKey(quad2), quad2]));
+    const deletes = [];
+    const inserts = [];
+    for (const [key, quad2] of originalByKey) {
+      if (!currentByKey.has(key)) {
+        deletes.push(quad2);
+      }
+    }
+    for (const [key, quad2] of currentByKey) {
+      if (!originalByKey.has(key)) {
+        inserts.push(quad2);
+      }
+    }
+    return { inserts, deletes };
+  }
+  function quadKey(quad2) {
+    return [
+      termKey(quad2.subject),
+      termKey(quad2.predicate),
+      termKey(quad2.object),
+      termKey(quad2.graph)
+    ].join(" ");
+  }
+  function termKey(term) {
+    if (!term) {
+      return "";
+    }
+    if (term.termType == "Literal") {
+      return [
+        "Literal",
+        term.value,
+        term.language ?? "",
+        term.datatype?.value ?? term.datatype?.id ?? ""
+      ].join("\0");
+    }
+    return `${term.termType}\0${term.value ?? term.id ?? ""}`;
+  }
+  function assertPatchable(quads, operation) {
+    const hasBlankNode = quads.some(
+      (quad2) => quad2.subject.termType == "BlankNode" || quad2.predicate.termType == "BlankNode" || quad2.object.termType == "BlankNode"
+    );
+    if (hasBlankNode) {
+      throw new Error(`Cannot generate a Solid PATCH with blank nodes in ${operation} changes; use graph.write() and PUT instead`);
+    }
+  }
+  function serializePatch(source, inserts, deletes) {
+    const prefixes2 = {
+      ...source.prefixes ?? {},
+      solid: solidNamespace
+    };
+    const writer = new N3Writer({
+      format: "text/turtle",
+      prefixes: prefixes2
+    });
+    const lines = [];
+    for (const [prefix, iri] of Object.entries(prefixes2)) {
+      lines.push(`@prefix ${prefix}: <${iri}> .`);
+    }
+    if (lines.length) {
+      lines.push("");
+    }
+    const predicates = [];
+    if (deletes.length) {
+      predicates.push(`solid:deletes ${formula(writer, deletes)}`);
+    }
+    if (inserts.length) {
+      predicates.push(`solid:inserts ${formula(writer, inserts)}`);
+    }
+    let patch = `_:patch a solid:InsertDeletePatch`;
+    if (predicates.length) {
+      patch += ";\n	" + predicates.join(";\n	");
+    }
+    lines.push(`${patch} .`);
+    return lines.join("\n") + "\n";
+  }
+  function formula(writer, quads) {
+    if (!quads.length) {
+      return "{}";
+    }
+    const lines = quads.map((quad2) => `
+		${writer.quadToString(quad2.subject, quad2.predicate, quad2.object).trim()}`);
+    return `{${lines.join("")}
+	}`;
+  }
 
   // src/index.mjs
   var { default: _coreDefault, ...core } = oldm_exports;
@@ -5038,12 +5158,14 @@
       const {
         parser = n3Parser,
         writer = n3Writer,
+        patchWriter = n3PatchWriter,
         ...contextOptions
       } = options;
       return oldm({
         ...contextOptions,
         parser,
-        writer
+        writer,
+        patchWriter
       });
     },
     ...core,

@@ -269,6 +269,27 @@ tap.test('write delegates to the configured public writer', async t => {
 	t.end()
 })
 
+tap.test('patch delegates to the configured public patch writer with the original source', async t => {
+	const context = oldm({
+		parser: parserFor([]),
+		writer: () => Promise.resolve('turtle'),
+		patchWriter: source => Promise.resolve(source.originalSource)
+	})
+	const source = context.parse('original turtle', url, 'text/turtle')
+
+	t.equal(await source.patch(), 'original turtle')
+
+	t.end()
+})
+
+tap.test('patch rejects when no patch writer is configured', async t => {
+	const source = contextFor([]).parse('', url, 'text/turtle')
+
+	t.throws(() => source.patch(), /without a configured patchWriter/)
+
+	t.end()
+})
+
 tap.test('context registers parsed graphs and exposes a combined read view', t => {
 	const profileUrl = 'https://example.org/profile/card#me'
 	const settingsUrl = 'https://example.org/settings/private#prefs'
