@@ -1,6 +1,6 @@
 {
   "name": "@muze-nl/oldm-n3",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "N3 parser and writer adapter for OLDM",
   "type": "module",
   "main": "src/oldm-n3.mjs",
