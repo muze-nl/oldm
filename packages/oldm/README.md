@@ -14,11 +14,12 @@ For explicit, tree-shakeable imports, use `@muze-nl/oldm-core` and `@muze-nl/old
 
 ```javascript
 import oldm, { Collection, one, many } from '@muze-nl/oldm-core'
-import { n3Parser, n3Writer } from '@muze-nl/oldm-n3'
+import { n3Parser, n3PatchWriter, n3Writer } from '@muze-nl/oldm-n3'
 
 const context = oldm({
   parser: n3Parser,
-  writer: n3Writer
+  writer: n3Writer,
+  patchWriter: n3PatchWriter
 })
 ```
 
@@ -92,6 +93,17 @@ delete me.vcard$nickname
 ```
 
 If there is no obvious source graph, OLDM throws and asks you to choose one explicitly with `context.set/add/delete(..., { graph })` or `graph.set/add/delete(...)`.
+
+## Solid PATCH output
+
+`oldm.context()` wires in the N3 patch writer by default. After parsing and editing a graph, call `graph.patch()` to generate a Solid N3 Patch string instead of a full Turtle document.
+
+```javascript
+const profile = context.parse(profileTurtle, profileUrl, 'text/turtle')
+profile.set(`${profileUrl}#me`, 'vcard$fn', 'Auke C.')
+
+const patch = await profile.patch()
+```
 
 ## Browser bundles
 

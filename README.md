@@ -32,11 +32,12 @@ npm install @muze-nl/oldm-core @muze-nl/oldm-n3
 
 ```javascript
 import oldm, { one, many, Collection } from '@muze-nl/oldm-core'
-import { n3Parser, n3Writer } from '@muze-nl/oldm-n3'
+import { n3Parser, n3PatchWriter, n3Writer } from '@muze-nl/oldm-n3'
 
 const context = oldm({
   parser: n3Parser,
-  writer: n3Writer
+  writer: n3Writer,
+  patchWriter: n3PatchWriter
 })
 ```
 
@@ -110,6 +111,24 @@ delete me.vcard$nickname
 ```
 
 If there is no obvious source graph, OLDM throws and asks you to choose one explicitly with `context.set/add/delete(..., { graph })` or `graph.set/add/delete(...)`.
+
+## Solid PATCH output
+
+When a context has a patch writer, `graph.patch()` returns a Solid N3 Patch string for the changes between the original parsed source and the graph's current Turtle output.
+
+```javascript
+const profile = context.parse(profileTurtle, profileUrl, 'text/turtle')
+profile.set(`${profileUrl}#me`, 'vcard$fn', 'Auke C.')
+
+const patch = await profile.patch()
+await fetch(profileUrl, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'text/n3' },
+  body: patch
+})
+```
+
+The default `@muze-nl/oldm` package wires in the N3 patch writer. Direct `@muze-nl/oldm-core` users can pass `patchWriter: n3PatchWriter`.
 
 ## Browser bundles
 

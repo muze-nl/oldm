@@ -1,6 +1,6 @@
 {
   "name": "@muze-nl/oldm",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Beginner-friendly Object - Linked Data Mapper package",
   "type": "module",
   "main": "src/index.mjs",
