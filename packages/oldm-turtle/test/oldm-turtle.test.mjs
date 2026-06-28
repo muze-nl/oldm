@@ -1,6 +1,6 @@
 import tap from 'tap'
 import oldm, {Collection, one} from '@muze-nl/oldm-core'
-import {turtleParser, turtleWriter} from '@muze-labs/oldm-turtle'
+import {turtleParser, turtlePatchWriter, turtleWriter} from '@muze-labs/oldm-turtle'
 
 const url = 'https://example.org/profile/card#me'
 
@@ -8,6 +8,7 @@ function createContext(options = {}) {
 	return oldm({
 		parser: turtleParser,
 		writer: turtleWriter,
+		patchWriter: turtlePatchWriter,
 		...options
 	})
 }
@@ -136,6 +137,115 @@ tap.test('works as an OLDM parser/writer adapter in multiple graphs', async t =>
 	profile.set(url, 'vcard$note', 'Written by turtle')
 	const output = await profile.write()
 	t.match(output, /Written by turtle/)
+
+	t.end()
+})
+
+tap.test('writes a Solid patch for simple named-node changes', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix schema: <http://schema.org/> .
+		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me
+			a schema:Person ;
+			vcard:fn "Auke" ;
+			vcard:note "Old" .
+	`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+	source.delete(url, 'vcard$note')
+	source.add(url, 'vcard$nickname', 'Poef')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix solid: <http:\/\/www\.w3\.org\/ns\/solid\/terms#> \./)
+	t.match(patch, /_:patch a solid:InsertDeletePatch;/)
+	t.match(patch, /solid:deletes \{/)
+	t.match(patch, /:me vcard:fn "Auke" \./)
+	t.match(patch, /:me vcard:note "Old" \./)
+	t.match(patch, /solid:inserts \{/)
+	t.match(patch, /:me vcard:fn "Auke C\." \./)
+	t.match(patch, /:me vcard:nickname "Poef" \./)
+	t.notMatch(patch, /schema:Person \./)
+
+	t.end()
+})
+
+tap.test('patch output prefers source prefixes over context prefixes', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix card: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me card:fn "Auke" .
+	`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#> \./)
+	t.notMatch(patch, /@prefix vcard:/)
+	t.match(patch, /:me card:fn "Auke" \./)
+	t.match(patch, /:me card:fn "Auke C\." \./)
+
+	t.end()
+})
+
+tap.test('patch output prefers a source Solid prefix for patch terms', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix s: <http://www.w3.org/ns/solid/terms#> .
+		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me vcard:fn "Auke" .
+	`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix s: <http:\/\/www\.w3\.org\/ns\/solid\/terms#> \./)
+	t.notMatch(patch, /@prefix solid:/)
+	t.match(patch, /_:patch a s:InsertDeletePatch;/)
+	t.match(patch, /s:deletes \{/)
+	t.match(patch, /s:inserts \{/)
+
+	t.end()
+})
+
+tap.test('patch output adds context prefixes only when source prefixes do not match', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me vcard:fn "Auke" .
+	`)
+
+	source.add(url, 'schema$knowsAbout', 'Solid')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix schema: <http:\/\/schema\.org\/> \./)
+	t.match(patch, /:me schema:knowsAbout "Solid" \./)
+
+	t.end()
+})
+
+tap.test('patch output rejects changed blank nodes', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me
+			vcard:hasEmail [
+				vcard:value <mailto:auke@example.org>
+			] .
+	`)
+
+	source.delete(url, 'vcard$hasEmail')
+
+	await t.rejects(source.patch(), /blank nodes/)
 
 	t.end()
 })

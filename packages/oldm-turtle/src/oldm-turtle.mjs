@@ -4,6 +4,7 @@ const RDF_FIRST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'
 const RDF_REST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'
 const RDF_NIL = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'
 const XSD = 'http://www.w3.org/2001/XMLSchema#'
+const SOLID = 'http://www.w3.org/ns/solid/terms#'
 
 function namedNode(id) {
 	return {termType: 'NamedNode', id}
@@ -488,18 +489,209 @@ export const turtleWriter = async (source) => {
 	return writer.write()
 }
 
+export const turtlePatchWriter = async (source) => {
+	if (source.originalSource == null) {
+		throw new Error('Cannot generate a patch without the original graph source')
+	}
+
+	const currentSource = new TurtleWriter(source, {
+		declarationPrefixes: {
+			...(source.context?.prefixes ?? {}),
+			...(source.prefixes ?? {})
+		}
+	}).write()
+	const original = turtleParser(source.originalSource, source.url).quads
+	const current = turtleParser(currentSource, source.url).quads
+	const {inserts, deletes} = diffQuads(original, current)
+
+	assertPatchable(inserts, 'insert')
+	assertPatchable(deletes, 'delete')
+
+	return serializePatch(source, inserts, deletes)
+}
+
+function diffQuads(original, current)
+{
+	const originalByKey = new Map(original.map(quad => [quadKey(quad), quad]))
+	const currentByKey = new Map(current.map(quad => [quadKey(quad), quad]))
+	const deletes = []
+	const inserts = []
+
+	for (const [key, quad] of originalByKey) {
+		if (!currentByKey.has(key)) {
+			deletes.push(quad)
+		}
+	}
+	for (const [key, quad] of currentByKey) {
+		if (!originalByKey.has(key)) {
+			inserts.push(quad)
+		}
+	}
+	return {inserts, deletes}
+}
+
+function quadKey(quad)
+{
+	return [
+		termKey(quad.subject),
+		termKey(quad.predicate),
+		termKey(quad.object)
+	].join(' ')
+}
+
+function termKey(term)
+{
+	if (term.termType == 'Literal') {
+		return [
+			'Literal',
+			term.value,
+			term.language ?? '',
+			term.datatype?.id ?? term.datatype?.value ?? ''
+		].join('\u0000')
+	}
+	return `${term.termType}\u0000${term.id ?? term.value ?? ''}`
+}
+
+function assertPatchable(quads, operation)
+{
+	const hasBlankNode = quads.some(quad =>
+		quad.subject.termType == 'BlankNode'
+		|| quad.predicate.termType == 'BlankNode'
+		|| quad.object.termType == 'BlankNode'
+	)
+	if (hasBlankNode) {
+		throw new Error(`Cannot generate a Solid PATCH with blank nodes in ${operation} changes; use graph.write() and PUT instead`)
+	}
+}
+
+function serializePatch(source, inserts, deletes)
+{
+	const prefixes = patchPrefixes(source, inserts, deletes)
+	const writer = new TurtleWriter(source, {
+		prefixes,
+		prefixOrder: Object.keys(prefixes)
+	})
+	const solidPrefix = findPrefix(SOLID, prefixes)
+	const lines = []
+
+	for (const [prefix, iri] of Object.entries(prefixes)) {
+		lines.push(`@prefix ${prefix}: <${writer.escapeIRI(iri)}> .`)
+	}
+	if (lines.length) {
+		lines.push('')
+	}
+
+	const predicates = []
+	if (deletes.length) {
+		predicates.push(`${solidPrefix}:deletes ${formula(writer, deletes)}`)
+	}
+	if (inserts.length) {
+		predicates.push(`${solidPrefix}:inserts ${formula(writer, inserts)}`)
+	}
+
+	let patch = `_:patch a ${solidPrefix}:InsertDeletePatch`
+	if (predicates.length) {
+		patch += ';\n\t' + predicates.join(';\n\t')
+	}
+	lines.push(`${patch} .`)
+
+	return lines.join('\n')+"\n"
+}
+
+function patchPrefixes(source, inserts, deletes)
+{
+	const prefixes = {...(source.prefixes ?? {})}
+	const contextPrefixes = source.context?.prefixes ?? {}
+
+	ensurePrefix(SOLID+'InsertDeletePatch', prefixes, contextPrefixes, 'solid', SOLID)
+	for (const quad of [...deletes, ...inserts]) {
+		ensureTermPrefixes(quad.subject, prefixes, contextPrefixes)
+		ensureTermPrefixes(quad.predicate, prefixes, contextPrefixes)
+		ensureTermPrefixes(quad.object, prefixes, contextPrefixes)
+	}
+	return prefixes
+}
+
+function ensureTermPrefixes(term, prefixes, contextPrefixes)
+{
+	if (term.termType == 'NamedNode') {
+		ensurePrefix(term.id ?? term.value, prefixes, contextPrefixes)
+	}
+	if (term.termType == 'Literal') {
+		const datatype = term.datatype?.id ?? term.datatype?.value
+		if (datatype && datatype != XSD+'string') {
+			ensurePrefix(datatype, prefixes, contextPrefixes)
+		}
+	}
+}
+
+function ensurePrefix(iri, prefixes, contextPrefixes, fallbackPrefix=null, fallbackIRI=null)
+{
+	if (findPrefix(iri, prefixes) != null) {
+		return
+	}
+
+	for (const [prefix, namespace] of Object.entries(contextPrefixes)) {
+		if (iri.startsWith(namespace)) {
+			prefixes[availablePrefix(prefix, prefixes)] = namespace
+			return
+		}
+	}
+
+	if (fallbackPrefix && fallbackIRI) {
+		prefixes[availablePrefix(fallbackPrefix, prefixes)] = fallbackIRI
+	}
+}
+
+function availablePrefix(prefix, prefixes)
+{
+	if (!(prefix in prefixes)) {
+		return prefix
+	}
+	let index = 2
+	while (`${prefix}${index}` in prefixes) {
+		index++
+	}
+	return `${prefix}${index}`
+}
+
+function findPrefix(iri, prefixes)
+{
+	for (const [prefix, namespace] of Object.entries(prefixes)) {
+		if (iri.startsWith(namespace)) {
+			return prefix
+		}
+	}
+	return null
+}
+
+function formula(writer, quads)
+{
+	if (!quads.length) {
+		return '{}'
+	}
+	const lines = quads.map(quad => `\n\t\t${writer.quadLine(quad)}`)
+	return `{${lines.join('')}\n\t}`
+}
+
 class TurtleWriter {
 	#source
+	#prefixes
+	#prefixOrder
+	#declarationPrefixes
 	#blankNode = 0
 	#blankNodeIds = new WeakMap()
 
-	constructor(source) {
+	constructor(source, options={}) {
 		this.#source = source
+		this.#prefixes = options.prefixes ?? null
+		this.#prefixOrder = options.prefixOrder ?? Object.keys(options.prefixes ?? {})
+		this.#declarationPrefixes = options.declarationPrefixes ?? this.#source.prefixes ?? this.#source.context.prefixes
 	}
 
 	write() {
 		const lines = []
-		for (const [prefix, iri] of Object.entries(this.#source.prefixes ?? this.#source.context.prefixes)) {
+		for (const [prefix, iri] of Object.entries(this.#declarationPrefixes)) {
 			lines.push(`@prefix ${prefix}: <${this.escapeIRI(iri)}> .`)
 		}
 		if (lines.length) {
@@ -539,6 +731,30 @@ class TurtleWriter {
 			.join(' ;\n\t')
 	}
 
+	quadLine(quad) {
+		return `${this.term(quad.subject)} ${this.predicate(quad.predicate)} ${this.term(quad.object)} .`
+	}
+
+	term(term) {
+		if (term.termType == 'NamedNode') {
+			return this.resource(term.id ?? term.value)
+		}
+		if (term.termType == 'BlankNode') {
+			return `_:${term.id ?? term.value}`
+		}
+		if (term.termType == 'Literal') {
+			return this.termLiteral(term)
+		}
+		throw new Error(`Cannot serialize unknown Turtle term: ${term.termType}`)
+	}
+
+	predicate(term) {
+		if ((term.id ?? term.value) == rdfType) {
+			return 'a'
+		}
+		return this.term(term)
+	}
+
 	object(value) {
 		if (value instanceof Collection) {
 			return `(${value.map(item => this.object(item)).join(' ')})`
@@ -550,6 +766,19 @@ class TurtleWriter {
 			return this.blankNode(value)
 		}
 		return this.literal(value)
+	}
+
+	termLiteral(term) {
+		const quoted = `"${this.escapeString(String(term.value))}"`
+		if (term.language) {
+			return `${quoted}@${term.language}`
+		}
+
+		const datatype = term.datatype?.id ?? term.datatype?.value
+		if (!datatype || datatype == XSD+'string') {
+			return quoted
+		}
+		return `${quoted}^^${this.resource(datatype)}`
 	}
 
 	blankNode(value) {
@@ -584,11 +813,32 @@ class TurtleWriter {
 	}
 
 	resource(id) {
+		if (this.#prefixes) {
+			const short = this.shortResource(id)
+			if (short) {
+				return short
+			}
+		}
 		const short = this.#source.shortURI(id, ':')
 		if (/^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short) || /^:[^\s]*$/.test(short) || short == 'a') {
 			return short
 		}
 		return `<${this.escapeIRI(id)}>`
+	}
+
+	shortResource(id) {
+		for (const prefix of this.#prefixOrder) {
+			const namespace = this.#prefixes[prefix]
+			if (!namespace || !id.startsWith(namespace)) {
+				continue
+			}
+			const local = id.substring(namespace.length)
+			const short = `${prefix}:${local}`
+			if (/^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short) || /^:[^\s]*$/.test(short)) {
+				return short
+			}
+		}
+		return null
 	}
 
 	values(value) {
