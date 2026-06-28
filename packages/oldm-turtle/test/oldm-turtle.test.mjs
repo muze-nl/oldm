@@ -141,6 +141,43 @@ tap.test('works as an OLDM parser/writer adapter in multiple graphs', async t =>
 	t.end()
 })
 
+tap.test('turtleWriter prefers source prefixes over context prefixes', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix card: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me card:fn "Auke" .
+	`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+
+	const output = await source.write()
+
+	t.match(output, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#> \./)
+	t.notMatch(output, /@prefix vcard:/)
+	t.match(output, /:me card:fn "Auke C\." \./)
+
+	t.end()
+})
+
+tap.test('turtleWriter adds context prefixes only when source prefixes do not match', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me vcard:fn "Auke" .
+	`)
+
+	source.add(url, 'schema$knowsAbout', 'Solid')
+
+	const output = await source.write()
+
+	t.match(output, /@prefix schema: <http:\/\/schema\.org\/> \./)
+	t.match(output, /:me vcard:fn "Auke" ;\n\tschema:knowsAbout "Solid" \./)
+
+	t.end()
+})
+
 tap.test('writes a Solid patch for simple named-node changes', async t => {
 	const source = parse(`
 		@prefix : <#> .

@@ -128,6 +128,25 @@ tap.test('n3Writer serializes blank nodes as object values', async t => {
 	t.end()
 })
 
+tap.test('n3Writer prefers source prefixes over context prefixes', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix card: <http://www.w3.org/2006/vcard/ns#>.
+
+:me card:fn "Auke".
+`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+
+	const output = await source.write()
+
+	t.match(output, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#>/)
+	t.notMatch(output, /@prefix vcard:/)
+	t.match(output, /:me card:fn "Auke C\."/)
+
+	t.end()
+})
+
 tap.test('n3PatchWriter serializes simple named-node changes as a Solid N3 Patch', async t => {
 	const source = parse(`
 @prefix : <#>.
@@ -155,6 +174,66 @@ tap.test('n3PatchWriter serializes simple named-node changes as a Solid N3 Patch
 	t.match(patch, /:me vcard:fn "Auke C\." \./)
 	t.match(patch, /:me vcard:nickname "Poef" \./)
 	t.notMatch(patch, /schema:Person \./)
+
+	t.end()
+})
+
+tap.test('n3PatchWriter prefers source prefixes over context prefixes', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix card: <http://www.w3.org/2006/vcard/ns#>.
+
+:me card:fn "Auke".
+`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#> \./)
+	t.notMatch(patch, /@prefix vcard:/)
+	t.match(patch, /:me card:fn "Auke" \./)
+	t.match(patch, /:me card:fn "Auke C\." \./)
+
+	t.end()
+})
+
+tap.test('n3PatchWriter prefers a source Solid prefix for patch terms', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix s: <http://www.w3.org/ns/solid/terms#>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+
+:me vcard:fn "Auke".
+`)
+
+	source.set(url, 'vcard$fn', 'Auke C.')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix s: <http:\/\/www\.w3\.org\/ns\/solid\/terms#> \./)
+	t.notMatch(patch, /@prefix solid:/)
+	t.match(patch, /_:patch a s:InsertDeletePatch;/)
+	t.match(patch, /s:deletes \{/)
+	t.match(patch, /s:inserts \{/)
+
+	t.end()
+})
+
+tap.test('n3PatchWriter adds context prefixes only when source prefixes do not match', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+
+:me vcard:fn "Auke".
+`)
+
+	source.add(url, 'schema$knowsAbout', 'Solid')
+
+	const patch = await source.patch()
+
+	t.match(patch, /@prefix schema: <http:\/\/schema\.org\/> \./)
+	t.match(patch, /:me schema:knowsAbout "Solid" \./)
 
 	t.end()
 })

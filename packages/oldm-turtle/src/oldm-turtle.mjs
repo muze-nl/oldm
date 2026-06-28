@@ -485,7 +485,12 @@ class TurtleParser {
 export const turtleParser = (input, uri) => new TurtleParser(input, uri).parse()
 
 export const turtleWriter = async (source) => {
-	const writer = new TurtleWriter(source)
+	const prefixes = writePrefixes(source)
+	const writer = new TurtleWriter(source, {
+		prefixes,
+		prefixOrder: Object.keys(prefixes),
+		declarationPrefixes: prefixes
+	})
 	return writer.write()
 }
 
@@ -612,6 +617,58 @@ function patchPrefixes(source, inserts, deletes)
 	return prefixes
 }
 
+function writePrefixes(source)
+{
+	const prefixes = {...(source.prefixes ?? {})}
+	const contextPrefixes = source.context?.prefixes ?? {}
+
+	for (const [id, subject] of Object.entries(source.subjects)) {
+		ensurePrefix(id, prefixes, contextPrefixes)
+		ensureObjectPrefixes(subject, source, prefixes, contextPrefixes)
+	}
+	return prefixes
+}
+
+function ensureObjectPrefixes(object, source, prefixes, contextPrefixes)
+{
+	if (object.a) {
+		for (const type of values(object.a)) {
+			ensurePrefix(source.fullURI(type), prefixes, contextPrefixes)
+		}
+	}
+	for (const [predicate, value] of Object.entries(object)) {
+		if (predicate == 'id' || predicate == 'a') {
+			continue
+		}
+		ensurePrefix(source.fullURI(predicate), prefixes, contextPrefixes)
+		for (const item of values(value)) {
+			ensureValuePrefixes(item, source, prefixes, contextPrefixes)
+		}
+	}
+}
+
+function ensureValuePrefixes(value, source, prefixes, contextPrefixes)
+{
+	if (value instanceof Collection) {
+		for (const item of value) {
+			ensureValuePrefixes(item, source, prefixes, contextPrefixes)
+		}
+		return
+	}
+	if (value instanceof NamedNode) {
+		ensurePrefix(value.id, prefixes, contextPrefixes)
+		return
+	}
+	if (value instanceof BlankNode) {
+		ensureObjectPrefixes(value, source, prefixes, contextPrefixes)
+		return
+	}
+	const datatype = source.getType(value)
+	if (datatype && datatype != 'xsd$string') {
+		ensurePrefix(source.fullURI(datatype), prefixes, contextPrefixes)
+	}
+}
+
 function ensureTermPrefixes(term, prefixes, contextPrefixes)
 {
 	if (term.termType == 'NamedNode') {
@@ -663,6 +720,14 @@ function findPrefix(iri, prefixes)
 		}
 	}
 	return null
+}
+
+function values(value)
+{
+	if (Array.isArray(value) && !(value instanceof Collection)) {
+		return value
+	}
+	return [value]
 }
 
 function formula(writer, quads)

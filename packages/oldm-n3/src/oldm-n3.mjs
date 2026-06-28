@@ -272,10 +272,8 @@ function assertPatchable(quads, operation)
 
 function serializePatch(source, inserts, deletes)
 {
-	const prefixes = {
-		...(source.prefixes ?? {}),
-		solid: solidNamespace
-	}
+	const prefixes = patchPrefixes(source, inserts, deletes)
+	const solidPrefix = findPrefix(solidNamespace, prefixes)
 	const writer = new Writer({
 		format: 'text/turtle',
 		prefixes
@@ -290,19 +288,86 @@ function serializePatch(source, inserts, deletes)
 
 	const predicates = []
 	if (deletes.length) {
-		predicates.push(`solid:deletes ${formula(writer, deletes)}`)
+		predicates.push(`${solidPrefix}:deletes ${formula(writer, deletes)}`)
 	}
 	if (inserts.length) {
-		predicates.push(`solid:inserts ${formula(writer, inserts)}`)
+		predicates.push(`${solidPrefix}:inserts ${formula(writer, inserts)}`)
 	}
 
-	let patch = `_:patch a solid:InsertDeletePatch`
+	let patch = `_:patch a ${solidPrefix}:InsertDeletePatch`
 	if (predicates.length) {
 		patch += ';\n\t' + predicates.join(';\n\t')
 	}
 	lines.push(`${patch} .`)
 
 	return lines.join('\n')+"\n"
+}
+
+function patchPrefixes(source, inserts, deletes)
+{
+	const prefixes = {...(source.prefixes ?? {})}
+	const contextPrefixes = source.context?.prefixes ?? {}
+
+	ensurePrefix(solidNamespace+'InsertDeletePatch', prefixes, contextPrefixes, 'solid', solidNamespace)
+	for (const quad of [...deletes, ...inserts]) {
+		ensureTermPrefixes(quad.subject, prefixes, contextPrefixes)
+		ensureTermPrefixes(quad.predicate, prefixes, contextPrefixes)
+		ensureTermPrefixes(quad.object, prefixes, contextPrefixes)
+	}
+	return prefixes
+}
+
+function ensureTermPrefixes(term, prefixes, contextPrefixes)
+{
+	if (term.termType == 'NamedNode') {
+		ensurePrefix(term.value ?? term.id, prefixes, contextPrefixes)
+	}
+	if (term.termType == 'Literal') {
+		const datatype = term.datatype?.value ?? term.datatype?.id
+		if (datatype && datatype != 'http://www.w3.org/2001/XMLSchema#string') {
+			ensurePrefix(datatype, prefixes, contextPrefixes)
+		}
+	}
+}
+
+function ensurePrefix(iri, prefixes, contextPrefixes, fallbackPrefix=null, fallbackIRI=null)
+{
+	if (findPrefix(iri, prefixes) != null) {
+		return
+	}
+
+	for (const [prefix, namespace] of Object.entries(contextPrefixes)) {
+		if (iri.startsWith(namespace)) {
+			prefixes[availablePrefix(prefix, prefixes)] = namespace
+			return
+		}
+	}
+
+	if (fallbackPrefix && fallbackIRI) {
+		prefixes[availablePrefix(fallbackPrefix, prefixes)] = fallbackIRI
+	}
+}
+
+function availablePrefix(prefix, prefixes)
+{
+	if (!(prefix in prefixes)) {
+		return prefix
+	}
+	let index = 2
+	while (`${prefix}${index}` in prefixes) {
+		index++
+	}
+	return `${prefix}${index}`
+}
+
+function findPrefix(iri, prefixes)
+{
+	for (const [prefix, namespace] of Object.entries(prefixes)) {
+		if (iri.startsWith(namespace)) {
+			return prefix
+		}
+	}
+	return null
 }
 
 function formula(writer, quads)
