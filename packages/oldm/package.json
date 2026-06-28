@@ -1,6 +1,6 @@
 {
   "name": "@muze-nl/oldm",
-  "version": "0.5.3",
+  "version": "0.6.1",
   "description": "Beginner-friendly Object - Linked Data Mapper package",
   "type": "module",
   "main": "src/index.mjs",
@@ -29,8 +29,8 @@
   "author": "auke@muze.nl",
   "license": "MIT",
   "dependencies": {
-    "@muze-nl/oldm-core": "^0.5.3",
-    "@muze-nl/oldm-n3": "^0.5.3"
+    "@muze-nl/oldm-core": "^0.6.0",
+    "@muze-nl/oldm-n3": "^0.6.0"
   },
   "files": [
     "dist/",
