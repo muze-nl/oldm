@@ -41,6 +41,27 @@ const context = oldm({
 ```
 
 
+## Prefix preference
+
+OLDM shortens predicate and type IRIs with the prefixes configured on the context. Prefix declarations found in Turtle input are parser conveniences; they do not decide the JavaScript property names exposed by OLDM.
+
+When multiple prefixes point at the same namespace, client-provided prefixes are preferred over OLDM defaults, and defaults are preferred over prefixes found in a parsed source document. For example, both `pim:` and `space:` are common aliases for `http://www.w3.org/ns/pim/space#`. Since OLDM prefers `space` for that namespace, profile data using either `pim:storage` or `space:storage` is exposed as `space$storage` in JavaScript.
+
+```javascript
+const context = oldm({
+  parser: n3Parser,
+  prefixes: {
+    space: 'http://www.w3.org/ns/pim/space#'
+  }
+})
+
+const profile = context.parse(turtle, profileUrl, 'text/turtle')
+const me = profile.subjects[`${profileUrl}#me`]
+
+console.log(me.space$storage.id)
+```
+
+
 ## Multiple graphs in one context
 
 A context keeps a registry of every parsed graph. Each `context.parse()` call still returns a `Graph` for the parsed resource, while the context exposes a combined view over all graphs loaded into that context.

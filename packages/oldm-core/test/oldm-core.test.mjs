@@ -302,14 +302,19 @@ tap.test('context registers parsed graphs and exposes a combined read view', t =
 	t.equal(context.graph(settingsUrl), settingsGraph)
 	t.equal(context.graphsByUrl[profileUrl], profile)
 	t.equal(context.graphsByUrl[settingsUrl], settingsGraph)
+	t.equal(profile.context, context)
+	t.equal(settingsGraph.context, context)
 
 	t.equal(context.get(profileUrl).id, profileUrl)
+	t.equal(profile.context.get(profileUrl).id, profileUrl)
 	t.equal(String(context.get(profileUrl).vcard$fn), 'Auke')
 	t.equal(context.get(settingsUrl).foaf$primaryTopic.id, profileUrl)
 	const subjects = context.subjects
 	t.equal(subjects[settingsUrl].foaf$primaryTopic, subjects[profileUrl])
 	t.equal(subjects[profileUrl].graph, context)
+	t.equal(profile.context.subjects[profileUrl].graph, context)
 	t.same(context.data.map(subject => subject.id).sort(), [profileUrl, settingsUrl, 'https://issuer.example/'].sort())
+	t.same(profile.context.data.map(subject => subject.id).sort(), context.data.map(subject => subject.id).sort())
 
 	// Graph views stay separate and unchanged.
 	t.equal(profile.get(profileUrl).graph, profile)
@@ -754,5 +759,46 @@ tap.test('direct assignment on the combined context view rejects ambiguous graph
 	}, TypeError)
 	t.equal(combined.id, subjectUrl)
 
+	t.end()
+})
+
+tap.test('client prefixes are preferred over source and default aliases when shortening predicates', t => {
+	const space = 'http://www.w3.org/ns/pim/space#'
+	const documentUrl = 'https://example.org/profile/card'
+	const me = `${documentUrl}#me`
+	const storage = 'https://example.org/'
+	const context = oldm({
+		parser() {
+			return {
+				quads: [quad(namedNode(me), namedNode(`${space}storage`), namedNode(storage))],
+				prefixes: {pim: space}
+			}
+		},
+		prefixes: {space}
+	})
+	const graph = context.parse('', documentUrl, 'text/turtle')
+
+	t.equal(graph.subjects[me].space$storage.id, storage)
+	t.equal(graph.subjects[me].pim$storage, undefined)
+	t.equal(context.subjects[me].space$storage.id, storage)
+	t.end()
+})
+
+tap.test('source-only prefixes are still available after client and default prefixes', t => {
+	const custom = 'https://example.org/ns#'
+	const documentUrl = 'https://example.org/data.ttl'
+	const subjectUrl = `${documentUrl}#item`
+	const context = oldm({
+		parser() {
+			return {
+				quads: [quad(namedNode(subjectUrl), namedNode(`${custom}score`), literal('10'))],
+				prefixes: {game: custom}
+			}
+		}
+	})
+	const graph = context.parse('', documentUrl, 'text/turtle')
+
+	t.equal(String(graph.subjects[subjectUrl].game$score), '10')
+	t.equal(String(context.subjects[subjectUrl].game$score), '10')
 	t.end()
 })

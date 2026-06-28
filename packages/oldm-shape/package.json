@@ -1,12 +1,13 @@
 {
-  "name": "@muze-labs/oldm-turtle",
+  "name": "@muze-labs/oldm-shape",
   "version": "0.2.0",
-  "description": "Small Turtle 1.1 parser/writer adapter for OLDM",
+  "description": "Small assert-style object shapes for validating JavaScript objects and mapping them to OLDM linked data objects.",
   "type": "module",
-  "main": "src/oldm-turtle.mjs",
+  "main": "src/oldm-shape.mjs",
   "exports": {
-    ".": "./src/oldm-turtle.mjs"
+    ".": "./src/oldm-shape.mjs"
   },
+  "sideEffects": false,
   "scripts": {
     "test": "tap --disable-coverage test/*.mjs",
     "coverage": "tap --allow-incomplete-coverage --show-full-coverage test/*.mjs"
@@ -14,17 +15,19 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/muze-nl/oldm.git",
-    "directory": "packages/oldm-turtle"
+    "directory": "packages/oldm-shape"
   },
   "author": "auke@muze.nl",
   "license": "MIT",
   "dependencies": {
+    "@muze-nl/assert": "^0.5.1",
     "@muze-nl/oldm-core": "^0.6.0"
   },
   "files": [
     "src/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "MUZE_ALIGNMENT.md"
   ],
   "engines": {
     "node": ">=20.0.0"
