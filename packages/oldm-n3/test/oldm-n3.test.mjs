@@ -106,6 +106,31 @@ tap.test('n3Writer serializes changed data that can be parsed back', async t => 
 	t.end()
 })
 
+
+tap.test('n3Writer prefers source prefixes over conflicting client prefixes', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix doc: <https://document.example/ns#>.
+:me doc:name "Auke".
+`, {
+		prefixes: {
+			client: 'https://document.example/ns#',
+			other: 'https://client.example/ns#'
+		}
+	})
+
+	source.context.set(url, 'other$note', 'Client-only value')
+	const output = await source.write()
+
+	t.match(output, /@prefix doc: <https:\/\/document\.example\/ns#>/)
+	t.match(output, /doc:name "Auke"/)
+	t.notMatch(output, /client:name "Auke"/)
+	t.match(output, /other:note "Client-only value"/)
+	t.notMatch(output, /client:note/)
+
+	t.end()
+})
+
 tap.test('n3Writer serializes blank nodes as object values', async t => {
 	const source = parse(`
 @prefix : <#>.
@@ -124,25 +149,6 @@ tap.test('n3Writer serializes blank nodes as object values', async t => {
 	const email = one(roundtripped.primary.vcard$hasEmail)
 
 	t.equal(email.vcard$value.id, 'mailto:auke@example.org')
-
-	t.end()
-})
-
-tap.test('n3Writer prefers source prefixes over context prefixes', async t => {
-	const source = parse(`
-@prefix : <#>.
-@prefix card: <http://www.w3.org/2006/vcard/ns#>.
-
-:me card:fn "Auke".
-`)
-
-	source.set(url, 'vcard$fn', 'Auke C.')
-
-	const output = await source.write()
-
-	t.match(output, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#>/)
-	t.notMatch(output, /@prefix vcard:/)
-	t.match(output, /:me card:fn "Auke C\."/)
 
 	t.end()
 })
@@ -178,67 +184,7 @@ tap.test('n3PatchWriter serializes simple named-node changes as a Solid N3 Patch
 	t.end()
 })
 
-tap.test('n3PatchWriter prefers source prefixes over context prefixes', async t => {
-	const source = parse(`
-@prefix : <#>.
-@prefix card: <http://www.w3.org/2006/vcard/ns#>.
-
-:me card:fn "Auke".
-`)
-
-	source.set(url, 'vcard$fn', 'Auke C.')
-
-	const patch = await source.patch()
-
-	t.match(patch, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#> \./)
-	t.notMatch(patch, /@prefix vcard:/)
-	t.match(patch, /:me card:fn "Auke" \./)
-	t.match(patch, /:me card:fn "Auke C\." \./)
-
-	t.end()
-})
-
-tap.test('n3PatchWriter prefers a source Solid prefix for patch terms', async t => {
-	const source = parse(`
-@prefix : <#>.
-@prefix s: <http://www.w3.org/ns/solid/terms#>.
-@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
-
-:me vcard:fn "Auke".
-`)
-
-	source.set(url, 'vcard$fn', 'Auke C.')
-
-	const patch = await source.patch()
-
-	t.match(patch, /@prefix s: <http:\/\/www\.w3\.org\/ns\/solid\/terms#> \./)
-	t.notMatch(patch, /@prefix solid:/)
-	t.match(patch, /_:patch a s:InsertDeletePatch;/)
-	t.match(patch, /s:deletes \{/)
-	t.match(patch, /s:inserts \{/)
-
-	t.end()
-})
-
-tap.test('n3PatchWriter adds context prefixes only when source prefixes do not match', async t => {
-	const source = parse(`
-@prefix : <#>.
-@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
-
-:me vcard:fn "Auke".
-`)
-
-	source.add(url, 'schema$knowsAbout', 'Solid')
-
-	const patch = await source.patch()
-
-	t.match(patch, /@prefix schema: <http:\/\/schema\.org\/> \./)
-	t.match(patch, /:me schema:knowsAbout "Solid" \./)
-
-	t.end()
-})
-
-tap.test('n3PatchWriter rejects patches with changed blank nodes', async t => {
+tap.test('n3PatchWriter replaces an owned blank-node value as a Solid N3 Patch', async t => {
 	const source = parse(`
 @prefix : <#>.
 @prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
@@ -249,9 +195,62 @@ tap.test('n3PatchWriter rejects patches with changed blank nodes', async t => {
 	].
 `)
 
-	source.delete(url, 'vcard$hasEmail')
+	source.set(source.primary.vcard$hasEmail, 'vcard$value', 'mailto:other@example.org')
 
-	await t.rejects(source.patch(), /blank nodes/)
+	const patch = await source.patch()
+
+	t.match(patch, /solid:where \{/)
+	t.match(patch, /:me vcard:hasEmail \?old0 \./)
+	t.match(patch, /\?old0 vcard:value <mailto:auke@example\.org> \./)
+	t.match(patch, /solid:deletes \{/)
+	t.match(patch, /solid:inserts \{/)
+	t.match(patch, /:me vcard:hasEmail _:insert0 \./)
+	t.match(patch, /_:insert0 vcard:value <mailto:other@example\.org> \./)
+	t.notMatch(patch, /Cannot generate/)
+
+	t.end()
+})
+
+tap.test('n3PatchWriter replaces an RDF collection as a whole anonymous value', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <http://schema.org/>.
+
+:me
+	schema:knowsAbout ("web" "solid").
+`)
+	const replacement = new Collection(source)
+	replacement.push('web', 'oldm')
+	source.set(url, 'schema$knowsAbout', replacement)
+
+	const patch = await source.patch()
+
+	t.match(patch, /solid:where \{/)
+	t.match(patch, /:me schema:knowsAbout \?old0 \./)
+	t.match(patch, /\?old0 rdf:first "web" \./)
+	t.match(patch, /\?old0 rdf:rest \?old1 \./)
+	t.match(patch, /\?old1 rdf:first "solid" \./)
+	t.match(patch, /solid:deletes \{/)
+	t.match(patch, /solid:inserts \{/)
+	t.match(patch, /_:insert0 rdf:first "web" \./)
+	t.match(patch, /_:insert1 rdf:first "oldm" \./)
+
+	t.end()
+})
+
+tap.test('n3PatchWriter rejects changed shared blank-node values', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <http://schema.org/>.
+
+:me schema:address _:shared.
+:org schema:address _:shared.
+_:shared schema:name "Amsterdam".
+`)
+
+	source.delete(url, 'schema$address')
+
+	await t.rejects(source.patch(), /shared anonymous value/)
 
 	t.end()
 })

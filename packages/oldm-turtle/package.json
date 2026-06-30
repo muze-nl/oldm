@@ -1,6 +1,6 @@
 {
   "name": "@muze-labs/oldm-turtle",
-  "version": "0.3.0",
+  "version": "0.2.0",
   "description": "Small Turtle 1.1 parser/writer adapter for OLDM",
   "type": "module",
   "main": "src/oldm-turtle.mjs",
@@ -19,7 +19,7 @@
   "author": "auke@muze.nl",
   "license": "MIT",
   "dependencies": {
-    "@muze-nl/oldm-core": "^0.6.0"
+    "@muze-nl/oldm-core": "^0.7.0"
   },
   "files": [
     "src/",

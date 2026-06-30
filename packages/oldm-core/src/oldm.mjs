@@ -263,21 +263,21 @@ export class Context {
 
 	set(subject, predicate, value, options={})
 	{
-		return this.resolveGraph(subject, options).set(subject, predicate, value)
+		return this.resolveGraph(subject, options).set(subject, predicate, value, {prefixPreference: 'context'})
 	}
 
 	add(subject, predicate, value, options={})
 	{
-		return this.resolveGraph(subject, options).add(subject, predicate, value)
+		return this.resolveGraph(subject, options).add(subject, predicate, value, {prefixPreference: 'context'})
 	}
 
 	delete(subject, predicate=null, value=undefined, options={})
 	{
 		const graph = this.resolveGraph(subject, options)
 		if (arguments.length < 3) {
-			return graph.delete(subject, predicate)
+			return graph.delete(subject, predicate, undefined, {prefixPreference: 'context', hasValue: false})
 		}
-		return graph.delete(subject, predicate, value)
+		return graph.delete(subject, predicate, value, {prefixPreference: 'context', hasValue: true})
 	}
 
 	resolveGraph(subject, options={})
@@ -389,7 +389,9 @@ export class Context {
 			return true
 		}
 
-		const property = this.propertyName(predicate)
+		const property = subject.graph instanceof Graph
+			? subject.graph.propertyName(this.fullURI(predicate), 'context')
+			: this.propertyName(predicate)
 		if (!(property in subject)) {
 			return false
 		}
@@ -459,8 +461,12 @@ export class Context {
 			if (predicate == 'id') {
 				continue
 			}
-			target[predicate] = mergeValue(
-				target[predicate],
+
+			const contextPredicate = predicate == 'a'
+				? 'a'
+				: this.propertyName(source.graph.fullURI(predicate, null, 'source'))
+			target[contextPredicate] = mergeValue(
+				target[contextPredicate],
 				resolveValue(value, subjects, this)
 			)
 		}
@@ -649,34 +655,96 @@ export class Graph
 		return this.subjects[this.fullURI(shortID)]
 	}
 
-	set(subject, predicate, value)
+	prefixEntries(preference='source')
 	{
-		const node = this.ensureSubject(subject)
-		const property = this.context.propertyName(predicate)
+		const sourcePrefixes = this.prefixes ?? {}
+		const sourceOrder = Object.keys(sourcePrefixes)
+		const contextPrefixes = this.context.prefixes ?? {}
+		const contextOrder = this.context.prefixOrder ?? Object.keys(contextPrefixes)
+		const entries = []
+		const seen = new Set()
+		const seenIRIs = new Set()
+		const add = (prefixes, order, skipKnownIRIs=false) => {
+			for (const prefix of order) {
+				if (!Object.prototype.hasOwnProperty.call(prefixes, prefix)) {
+					continue
+				}
+				const iri = prefixes[prefix]
+				if (!seen.has(prefix) && (!skipKnownIRIs || !seenIRIs.has(iri))) {
+					entries.push([prefix, iri])
+					seen.add(prefix)
+					seenIRIs.add(iri)
+				}
+			}
+			for (const prefix of Object.keys(prefixes)) {
+				const iri = prefixes[prefix]
+				if (!seen.has(prefix) && (!skipKnownIRIs || !seenIRIs.has(iri))) {
+					entries.push([prefix, iri])
+					seen.add(prefix)
+					seenIRIs.add(iri)
+				}
+			}
+		}
+
+		if (preference == 'context') {
+			add(contextPrefixes, contextOrder)
+			add(sourcePrefixes, sourceOrder, true)
+		} else {
+			add(sourcePrefixes, sourceOrder)
+			add(contextPrefixes, contextOrder, true)
+		}
+		return entries
+	}
+
+	prefixDeclarations(preference='source')
+	{
+		return Object.fromEntries(this.prefixEntries(preference))
+	}
+
+	propertyName(predicate, preference='source')
+	{
+		if (predicate?.id) {
+			predicate = predicate.id
+		}
+		const fullPredicate = this.fullURI(predicate, null, preference)
+		if (predicate == 'a' || fullPredicate == rdfType) {
+			return 'a'
+		}
+		return this.shortURI(fullPredicate, null, 'source')
+	}
+
+	set(subject, predicate, value, options={})
+	{
+		const preference = options.prefixPreference ?? 'source'
+		const node = this.ensureSubject(subject, preference)
+		const property = this.propertyName(predicate, preference)
 
 		if (property == 'a') {
-			node.a = this.normalizeTypeValues(value)
+			node.a = this.normalizeTypeValues(value, preference)
 		} else {
-			node[property] = this.normalizeValues(value)
+			node[property] = this.normalizeValues(value, preference)
 		}
 		return node
 	}
 
-	add(subject, predicate, value)
+	add(subject, predicate, value, options={})
 	{
-		const node = this.ensureSubject(subject)
-		const property = this.context.propertyName(predicate)
+		const preference = options.prefixPreference ?? 'source'
+		const node = this.ensureSubject(subject, preference)
+		const property = this.propertyName(predicate, preference)
 		const newValue = property == 'a'
-			? this.normalizeTypeValues(value)
-			: this.normalizeValues(value)
+			? this.normalizeTypeValues(value, preference)
+			: this.normalizeValues(value, preference)
 
 		node[property] = mergeValue(node[property], newValue)
 		return node
 	}
 
-	delete(subject, predicate=null, value=undefined)
+	delete(subject, predicate=null, value=undefined, options={})
 	{
-		const node = this.findSubject(subject)
+		const preference = options.prefixPreference ?? 'source'
+		const hasValue = options.hasValue ?? arguments.length >= 3
+		const node = this.findSubject(subject, preference)
 		if (!node) {
 			return false
 		}
@@ -691,19 +759,19 @@ export class Graph
 			return true
 		}
 
-		const property = this.context.propertyName(predicate)
+		const property = this.propertyName(predicate, preference)
 		if (!(property in node)) {
 			return false
 		}
 
-		if (arguments.length < 3) {
+		if (!hasValue) {
 			delete node[property]
 			return true
 		}
 
 		const deleteValues = property == 'a'
-			? values(this.normalizeTypeValues(value))
-			: values(this.normalizeValues(value))
+			? values(this.normalizeTypeValues(value, preference))
+			: values(this.normalizeValues(value, preference))
 		const remaining = values(node[property])
 			.filter(item => !deleteValues.some(deleteValue => sameValue(item, deleteValue)))
 
@@ -720,7 +788,7 @@ export class Graph
 		return true
 	}
 
-	ensureSubject(subject)
+	ensureSubject(subject, preference='source')
 	{
 		if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
 			if (subject.graph !== this) {
@@ -733,32 +801,32 @@ export class Graph
 			return this.addNamedNode(subject.id)
 		}
 
-		return this.addNamedNode(this.fullURI(subject))
+		return this.addNamedNode(this.fullURI(subject, null, preference))
 	}
 
-	findSubject(subject)
+	findSubject(subject, preference='source')
 	{
 		if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
 			return subject.graph === this ? subject : null
 		}
-		const id = subject?.id ? subject.id : this.fullURI(subject)
+		const id = subject?.id ? subject.id : this.fullURI(subject, null, preference)
 		return this.subjects[id]
 	}
 
-	normalizeValues(value)
+	normalizeValues(value, preference='source')
 	{
 		if (Array.isArray(value) && !(value instanceof Collection)) {
-			return value.map(item => this.normalizeValue(item))
+			return value.map(item => this.normalizeValue(item, preference))
 		}
-		return this.normalizeValue(value)
+		return this.normalizeValue(value, preference)
 	}
 
-	normalizeValue(value)
+	normalizeValue(value, preference='source')
 	{
 		if (value instanceof Collection) {
 			const collection = new Collection(this)
 			for (const item of value) {
-				collection.push(this.normalizeValue(item))
+				collection.push(this.normalizeValue(item, preference))
 			}
 			return collection
 		}
@@ -771,29 +839,29 @@ export class Graph
 			}
 			return value
 		}
-		if (this.looksLikeURI(value)) {
-			return this.addNamedNode(this.fullURI(value))
+		if (this.looksLikeURI(value, preference)) {
+			return this.addNamedNode(this.fullURI(value, null, preference))
 		}
 		return value
 	}
 
-	normalizeTypeValues(value)
+	normalizeTypeValues(value, preference='source')
 	{
 		if (Array.isArray(value) && !(value instanceof Collection)) {
-			return value.map(item => this.normalizeTypeValue(item))
+			return value.map(item => this.normalizeTypeValue(item, preference))
 		}
-		return this.normalizeTypeValue(value)
+		return this.normalizeTypeValue(value, preference)
 	}
 
-	normalizeTypeValue(value)
+	normalizeTypeValue(value, preference='source')
 	{
 		if (value instanceof NamedNode) {
-			return this.shortURI(value.id)
+			return this.shortURI(value.id, null, 'source')
 		}
-		return this.shortURI(this.fullURI(value))
+		return this.shortURI(this.fullURI(value, null, preference), null, 'source')
 	}
 
-	looksLikeURI(value)
+	looksLikeURI(value, preference='source')
 	{
 		if (typeof value != 'string') {
 			return false
@@ -802,34 +870,33 @@ export class Graph
 			return true
 		}
 		const [prefix, path] = value.split(this.context.separator)
-		return Boolean(path && this.context.prefixes[prefix])
+		return Boolean(path && this.prefixEntries(preference).some(([candidate]) => candidate == prefix))
 	}
 
-	fullURI(shortURI, separator=null)
+	fullURI(shortURI, separator=null, preference='source')
 	{
 		if (!separator) {
 			separator = this.context.separator
 		}
-		const [prefix, path] = shortURI.split(separator)
+		const [prefix, path] = String(shortURI).split(separator)
 		if (path) {
-			if (this.context.prefixes[prefix]) {
-				return this.context.prefixes[prefix]+path
-			}
-			if (this.prefixes[prefix]) {
-				return this.prefixes[prefix]+path
+			for (const [candidate, iri] of this.prefixEntries(preference)) {
+				if (candidate == prefix) {
+					return iri+path
+				}
 			}
 		}
 		return shortURI
 	}
 
-	shortURI(fullURI, separator=null)
+	shortURI(fullURI, separator=null, preference='source')
 	{
 		if (!separator) {
 			separator = this.context.separator
 		}
-		for (const prefix of this.context.prefixOrder) {
-			if (fullURI.startsWith(this.context.prefixes[prefix])) {
-				return prefix + separator + fullURI.substring(this.context.prefixes[prefix].length)
+		for (const [prefix, iri] of this.prefixEntries(preference)) {
+			if (fullURI.startsWith(iri)) {
+				return prefix + separator + fullURI.substring(iri.length)
 			}
 		}
 		if (this.url && fullURI.startsWith(this.url)) {

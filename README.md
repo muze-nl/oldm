@@ -130,6 +130,8 @@ await fetch(profileUrl, {
 
 The default `@muze-nl/oldm` package wires in the N3 patch writer. Direct `@muze-nl/oldm-core` users can pass `patchWriter: n3PatchWriter`.
 
+Owned anonymous values are handled conservatively. Fresh blank nodes and RDF collections can be inserted. Changing or deleting an existing owned blank node or collection replaces the named-subject edge into that anonymous value and the complete old anonymous closure. Shared or cyclic anonymous values are rejected so callers can fall back to full document replacement.
+
 ## Browser bundles
 
 The friendly package builds browser bundles into `packages/oldm/dist/`: an ESM bundle for module scripts and a classic global IIFE bundle for plain script tags.

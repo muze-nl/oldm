@@ -29,8 +29,8 @@
   "author": "auke@muze.nl",
   "license": "MIT",
   "dependencies": {
-    "@muze-nl/oldm-core": "^0.6.0",
-    "@muze-nl/oldm-n3": "^0.6.0"
+    "@muze-nl/oldm-core": "^0.7.0",
+    "@muze-nl/oldm-n3": "^0.7.0"
   },
   "files": [
     "dist/",

@@ -137,6 +137,40 @@ tap.test('parse exposes graph, primary, subjects, data, id and URI helpers', t =
 	t.end()
 })
 
+
+tap.test('source graphs prefer source prefixes while context subjects prefer client prefixes', t => {
+	const ns = 'https://document.example/ns#'
+	const me = namedNode(url)
+	const quads = [
+		quad(me, namedNode(`${ns}name`), literal('Source name'))
+	]
+	const context = oldm({
+		parser: parserFor(quads, {
+			doc: ns
+		}),
+		writer: source => Promise.resolve(JSON.stringify(source.data.map(subject => subject.id))),
+		prefixes: {
+			client: ns
+		}
+	})
+	const source = context.parse('', url, 'text/turtle')
+	const meInContext = context.get(url)
+
+	t.equal(source.shortURI(`${ns}name`), 'doc$name')
+	t.equal(context.shortURI(`${ns}name`), 'client$name')
+	t.equal(String(source.primary.doc$name), 'Source name')
+	t.equal(source.primary.client$name, undefined)
+	t.equal(String(meInContext.client$name), 'Source name')
+	t.equal(meInContext.doc$name, undefined)
+	t.same(context.sources(url, 'client$name'), [source])
+
+	context.set(url, 'client$name', 'Updated source name')
+	t.equal(String(source.primary.doc$name), 'Updated source name')
+	t.notOk(Object.keys(source.primary).includes('client$name'))
+
+	t.end()
+})
+
 tap.test('parse returns null primary when requested subject is absent', t => {
 	const quads = [
 		quad(namedNode('https://example.org/profile/card#other'), namedNode(`${vcard}fn`), literal('Other'))
@@ -783,7 +817,7 @@ tap.test('direct assignment on the combined context view rejects ambiguous graph
 	t.end()
 })
 
-tap.test('client prefixes are preferred over source and default aliases when shortening predicates', t => {
+tap.test('source graph prefixes and client view prefixes are both preserved when shortening predicates', t => {
 	const space = 'http://www.w3.org/ns/pim/space#'
 	const documentUrl = 'https://example.org/profile/card'
 	const me = `${documentUrl}#me`
@@ -799,9 +833,10 @@ tap.test('client prefixes are preferred over source and default aliases when sho
 	})
 	const graph = context.parse('', documentUrl, 'text/turtle')
 
-	t.equal(graph.subjects[me].space$storage.id, storage)
-	t.equal(graph.subjects[me].pim$storage, undefined)
+	t.equal(graph.subjects[me].pim$storage.id, storage)
+	t.equal(graph.subjects[me].space$storage, undefined)
 	t.equal(context.subjects[me].space$storage.id, storage)
+	t.equal(context.subjects[me].pim$storage, undefined)
 	t.end()
 })
 

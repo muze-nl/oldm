@@ -102,6 +102,8 @@ If there is no obvious source graph, OLDM throws and asks you to choose one expl
 
 `Graph#patch()` delegates to the configured `patchWriter`, just like `Graph#write()` delegates to `writer`. Core stays parser/writer agnostic; use `n3PatchWriter` from `@muze-nl/oldm-n3` when you want Solid N3 Patch output.
 
+Patch writers can support owned anonymous values conservatively: fresh blank nodes and RDF collections can be inserted, while changed or deleted existing anonymous values are replaced as complete closures. Shared or cyclic anonymous values should fall back to full document replacement.
+
 ## Public exports
 
 - default `oldm(options)` context factory

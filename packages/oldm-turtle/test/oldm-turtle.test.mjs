@@ -116,6 +116,32 @@ tap.test('writes Turtle that OLDM can parse back with the same public shape', as
 	t.end()
 })
 
+
+tap.test('turtleWriter prefers source prefixes and falls back to non-conflicting client prefixes', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix doc: <https://document.example/ns#> .
+
+		:me doc:name "Auke" .
+	`, {
+		prefixes: {
+			client: 'https://document.example/ns#',
+			other: 'https://client.example/ns#'
+		}
+	})
+
+	source.context.set(url, 'other$note', 'Client-only value')
+	const output = await source.write()
+
+	t.match(output, /@prefix doc: <https:\/\/document\.example\/ns#> \./)
+	t.match(output, /doc:name "Auke"/)
+	t.notMatch(output, /client:name "Auke"/)
+	t.match(output, /other:note "Client-only value"/)
+	t.notMatch(output, /client:note/)
+
+	t.end()
+})
+
 tap.test('works as an OLDM parser/writer adapter in multiple graphs', async t => {
 	const context = createContext()
 	const profile = context.parse(`
@@ -141,148 +167,69 @@ tap.test('works as an OLDM parser/writer adapter in multiple graphs', async t =>
 	t.end()
 })
 
-tap.test('turtleWriter prefers source prefixes over context prefixes', async t => {
-	const source = parse(`
-		@prefix : <#> .
-		@prefix card: <http://www.w3.org/2006/vcard/ns#> .
 
-		:me card:fn "Auke" .
-	`)
-
-	source.set(url, 'vcard$fn', 'Auke C.')
-
-	const output = await source.write()
-
-	t.match(output, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#> \./)
-	t.notMatch(output, /@prefix vcard:/)
-	t.match(output, /:me card:fn "Auke C\." \./)
-
-	t.end()
-})
-
-tap.test('turtleWriter adds context prefixes only when source prefixes do not match', async t => {
+tap.test('turtlePatchWriter replaces an owned blank-node value as a Solid N3 Patch', async t => {
 	const source = parse(`
 		@prefix : <#> .
 		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
 
-		:me vcard:fn "Auke" .
+		:me vcard:hasEmail [ vcard:value <mailto:auke@example.org> ] .
 	`)
 
-	source.add(url, 'schema$knowsAbout', 'Solid')
+	source.set(source.primary.vcard$hasEmail, 'vcard$value', 'mailto:other@example.org')
 
-	const output = await source.write()
+	const patch = await source.patch()
 
-	t.match(output, /@prefix schema: <http:\/\/schema\.org\/> \./)
-	t.match(output, /:me vcard:fn "Auke" ;\n\tschema:knowsAbout "Solid" \./)
+	t.match(patch, /solid:where \{/)
+	t.match(patch, /:me vcard:hasEmail \?old0 \./)
+	t.match(patch, /\?old0 vcard:value <mailto:auke@example\.org> \./)
+	t.match(patch, /solid:deletes \{/)
+	t.match(patch, /solid:inserts \{/)
+	t.match(patch, /:me vcard:hasEmail _:insert0 \./)
+	t.match(patch, /_:insert0 vcard:value <mailto:other@example\.org> \./)
 
 	t.end()
 })
 
-tap.test('writes a Solid patch for simple named-node changes', async t => {
+tap.test('turtlePatchWriter replaces an RDF collection as a whole anonymous value', async t => {
 	const source = parse(`
 		@prefix : <#> .
 		@prefix schema: <http://schema.org/> .
-		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
 
-		:me
-			a schema:Person ;
-			vcard:fn "Auke" ;
-			vcard:note "Old" .
+		:me schema:knowsAbout ("web" "solid") .
 	`)
-
-	source.set(url, 'vcard$fn', 'Auke C.')
-	source.delete(url, 'vcard$note')
-	source.add(url, 'vcard$nickname', 'Poef')
+	const replacement = new Collection(source)
+	replacement.push('web', 'oldm')
+	source.set(url, 'schema$knowsAbout', replacement)
 
 	const patch = await source.patch()
 
-	t.match(patch, /@prefix solid: <http:\/\/www\.w3\.org\/ns\/solid\/terms#> \./)
-	t.match(patch, /_:patch a solid:InsertDeletePatch;/)
+	t.match(patch, /solid:where \{/)
+	t.match(patch, /:me schema:knowsAbout \?old0 \./)
+	t.match(patch, /\?old0 rdf:first "web" \./)
+	t.match(patch, /\?old0 rdf:rest \?old1 \./)
+	t.match(patch, /\?old1 rdf:first "solid" \./)
 	t.match(patch, /solid:deletes \{/)
-	t.match(patch, /:me vcard:fn "Auke" \./)
-	t.match(patch, /:me vcard:note "Old" \./)
 	t.match(patch, /solid:inserts \{/)
-	t.match(patch, /:me vcard:fn "Auke C\." \./)
-	t.match(patch, /:me vcard:nickname "Poef" \./)
-	t.notMatch(patch, /schema:Person \./)
+	t.match(patch, /_:insert0 rdf:first "web" \./)
+	t.match(patch, /_:insert1 rdf:first "oldm" \./)
 
 	t.end()
 })
 
-tap.test('patch output prefers source prefixes over context prefixes', async t => {
+tap.test('turtlePatchWriter rejects changed shared blank-node values', async t => {
 	const source = parse(`
 		@prefix : <#> .
-		@prefix card: <http://www.w3.org/2006/vcard/ns#> .
+		@prefix schema: <http://schema.org/> .
 
-		:me card:fn "Auke" .
+		:me schema:address _:shared .
+		:org schema:address _:shared .
+		_:shared schema:name "Amsterdam" .
 	`)
 
-	source.set(url, 'vcard$fn', 'Auke C.')
+	source.delete(url, 'schema$address')
 
-	const patch = await source.patch()
-
-	t.match(patch, /@prefix card: <http:\/\/www\.w3\.org\/2006\/vcard\/ns#> \./)
-	t.notMatch(patch, /@prefix vcard:/)
-	t.match(patch, /:me card:fn "Auke" \./)
-	t.match(patch, /:me card:fn "Auke C\." \./)
-
-	t.end()
-})
-
-tap.test('patch output prefers a source Solid prefix for patch terms', async t => {
-	const source = parse(`
-		@prefix : <#> .
-		@prefix s: <http://www.w3.org/ns/solid/terms#> .
-		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
-
-		:me vcard:fn "Auke" .
-	`)
-
-	source.set(url, 'vcard$fn', 'Auke C.')
-
-	const patch = await source.patch()
-
-	t.match(patch, /@prefix s: <http:\/\/www\.w3\.org\/ns\/solid\/terms#> \./)
-	t.notMatch(patch, /@prefix solid:/)
-	t.match(patch, /_:patch a s:InsertDeletePatch;/)
-	t.match(patch, /s:deletes \{/)
-	t.match(patch, /s:inserts \{/)
-
-	t.end()
-})
-
-tap.test('patch output adds context prefixes only when source prefixes do not match', async t => {
-	const source = parse(`
-		@prefix : <#> .
-		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
-
-		:me vcard:fn "Auke" .
-	`)
-
-	source.add(url, 'schema$knowsAbout', 'Solid')
-
-	const patch = await source.patch()
-
-	t.match(patch, /@prefix schema: <http:\/\/schema\.org\/> \./)
-	t.match(patch, /:me schema:knowsAbout "Solid" \./)
-
-	t.end()
-})
-
-tap.test('patch output rejects changed blank nodes', async t => {
-	const source = parse(`
-		@prefix : <#> .
-		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
-
-		:me
-			vcard:hasEmail [
-				vcard:value <mailto:auke@example.org>
-			] .
-	`)
-
-	source.delete(url, 'vcard$hasEmail')
-
-	await t.rejects(source.patch(), /blank nodes/)
+	await t.rejects(source.patch(), /shared anonymous value/)
 
 	t.end()
 })

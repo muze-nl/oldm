@@ -15,8 +15,6 @@ const context = oldm({
 })
 ```
 
-`turtlePatchWriter` generates Solid N3 Patch output by diffing the original parsed source against the graph's current Turtle output. Patch serialization prefers prefixes declared by the source document; context prefixes are added only for namespaces that the source cannot already shorten. Changes involving blank nodes are rejected so callers can fall back to a full `PUT`.
-
 Currently supported:
 
 - `@prefix` / `PREFIX`
@@ -29,14 +27,15 @@ Currently supported:
 - blank node labels
 - blank node property lists
 - collections
+- Solid N3 Patch output for named-node changes and owned anonymous value replacements
 - predicate lists and object lists
 - comments
 - relative IRI resolution
-- Solid N3 Patch generation for named-node/literal changes
+
+Patch support follows the same conservative anonymous-value strategy as `@muze-nl/oldm-n3`: fresh blank nodes and collections can be inserted, existing owned blank nodes and collections are replaced as complete anonymous closures, and shared or cyclic anonymous values are rejected so callers can use full document replacement.
 
 Known limits in this experimental version:
 
 - no streaming input or output
 - no TriG, N-Quads, N3 rules, RDF-star, or RDF 1.2 extensions
 - escaping and prefixed-name validation are intentionally conservative
-- patch generation rejects blank-node and collection changes
