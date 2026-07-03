@@ -1,6 +1,6 @@
 import tap from 'tap'
 import oldm, {Collection, one} from '@muze-nl/oldm-core'
-import {turtleParser, turtleWriter} from '@muze-labs/oldm-turtle'
+import {turtleParser, turtlePatchWriter, turtleWriter} from '@muze-labs/oldm-turtle'
 
 const url = 'https://example.org/profile/card#me'
 
@@ -8,6 +8,7 @@ function createContext(options = {}) {
 	return oldm({
 		parser: turtleParser,
 		writer: turtleWriter,
+		patchWriter: turtlePatchWriter,
 		...options
 	})
 }
@@ -115,6 +116,32 @@ tap.test('writes Turtle that OLDM can parse back with the same public shape', as
 	t.end()
 })
 
+
+tap.test('turtleWriter prefers source prefixes and falls back to non-conflicting client prefixes', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix doc: <https://document.example/ns#> .
+
+		:me doc:name "Auke" .
+	`, {
+		prefixes: {
+			client: 'https://document.example/ns#',
+			other: 'https://client.example/ns#'
+		}
+	})
+
+	source.context.set(url, 'other$note', 'Client-only value')
+	const output = await source.write()
+
+	t.match(output, /@prefix doc: <https:\/\/document\.example\/ns#> \./)
+	t.match(output, /doc:name "Auke"/)
+	t.notMatch(output, /client:name "Auke"/)
+	t.match(output, /other:note "Client-only value"/)
+	t.notMatch(output, /client:note/)
+
+	t.end()
+})
+
 tap.test('works as an OLDM parser/writer adapter in multiple graphs', async t => {
 	const context = createContext()
 	const profile = context.parse(`
@@ -136,6 +163,73 @@ tap.test('works as an OLDM parser/writer adapter in multiple graphs', async t =>
 	profile.set(url, 'vcard$note', 'Written by turtle')
 	const output = await profile.write()
 	t.match(output, /Written by turtle/)
+
+	t.end()
+})
+
+
+tap.test('turtlePatchWriter replaces an owned blank-node value as a Solid N3 Patch', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+		:me vcard:hasEmail [ vcard:value <mailto:auke@example.org> ] .
+	`)
+
+	source.set(source.primary.vcard$hasEmail, 'vcard$value', 'mailto:other@example.org')
+
+	const patch = await source.patch()
+
+	t.match(patch, /solid:where \{/)
+	t.match(patch, /:me vcard:hasEmail \?old0 \./)
+	t.match(patch, /\?old0 vcard:value <mailto:auke@example\.org> \./)
+	t.match(patch, /solid:deletes \{/)
+	t.match(patch, /solid:inserts \{/)
+	t.match(patch, /:me vcard:hasEmail _:insert0 \./)
+	t.match(patch, /_:insert0 vcard:value <mailto:other@example\.org> \./)
+
+	t.end()
+})
+
+tap.test('turtlePatchWriter replaces an RDF collection as a whole anonymous value', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix schema: <http://schema.org/> .
+
+		:me schema:knowsAbout ("web" "solid") .
+	`)
+	const replacement = new Collection(source)
+	replacement.push('web', 'oldm')
+	source.set(url, 'schema$knowsAbout', replacement)
+
+	const patch = await source.patch()
+
+	t.match(patch, /solid:where \{/)
+	t.match(patch, /:me schema:knowsAbout \?old0 \./)
+	t.match(patch, /\?old0 rdf:first "web" \./)
+	t.match(patch, /\?old0 rdf:rest \?old1 \./)
+	t.match(patch, /\?old1 rdf:first "solid" \./)
+	t.match(patch, /solid:deletes \{/)
+	t.match(patch, /solid:inserts \{/)
+	t.match(patch, /_:insert0 rdf:first "web" \./)
+	t.match(patch, /_:insert1 rdf:first "oldm" \./)
+
+	t.end()
+})
+
+tap.test('turtlePatchWriter rejects changed shared blank-node values', async t => {
+	const source = parse(`
+		@prefix : <#> .
+		@prefix schema: <http://schema.org/> .
+
+		:me schema:address _:shared .
+		:org schema:address _:shared .
+		_:shared schema:name "Amsterdam" .
+	`)
+
+	source.delete(url, 'schema$address')
+
+	await t.rejects(source.patch(), /shared anonymous value/)
 
 	t.end()
 })

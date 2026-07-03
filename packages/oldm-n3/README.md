@@ -15,7 +15,7 @@ const context = oldm({
 })
 ```
 
-`n3PatchWriter` generates Solid N3 Patch output by diffing the original parsed source against the graph's current Turtle output. Changes involving blank nodes are rejected so callers can fall back to a full `PUT`.
+`n3PatchWriter` generates Solid N3 Patch output by diffing the original parsed source against the graph's current Turtle output. Owned anonymous values are supported conservatively: inserting a fresh blank node or collection emits it in `solid:inserts`, while changing or deleting an existing blank node or collection replaces the owning named-subject triple and the complete old anonymous closure through variables in `solid:where`/`solid:deletes`. Shared or cyclic anonymous values are rejected so callers can fall back to a full `PUT`.
 
 ## Public exports
 

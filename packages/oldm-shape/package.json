@@ -21,7 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "@muze-nl/assert": "^0.5.1",
-    "@muze-nl/oldm-core": "^0.6.0"
+    "@muze-nl/oldm-core": "^0.7.0"
   },
   "files": [
     "src/",

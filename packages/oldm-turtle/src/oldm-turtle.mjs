@@ -13,6 +13,10 @@ function blankNode(id) {
 	return {termType: 'BlankNode', id}
 }
 
+function variable(id) {
+	return {termType: 'Variable', id}
+}
+
 function literal(value, datatype=XSD+'string', language='') {
 	return {
 		termType: 'Literal',
@@ -499,7 +503,7 @@ class TurtleWriter {
 
 	write() {
 		const lines = []
-		for (const [prefix, iri] of Object.entries(this.#source.prefixes ?? this.#source.context.prefixes)) {
+		for (const [prefix, iri] of Object.entries(this.#source.prefixDeclarations('source'))) {
 			lines.push(`@prefix ${prefix}: <${this.escapeIRI(iri)}> .`)
 		}
 		if (lines.length) {
@@ -585,7 +589,7 @@ class TurtleWriter {
 
 	resource(id) {
 		const short = this.#source.shortURI(id, ':')
-		if (/^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short) || /^:[^\s]*$/.test(short) || short == 'a') {
+		if ((short != id && /^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short)) || /^:[^\s]*$/.test(short) || short == 'a') {
 			return short
 		}
 		return `<${this.escapeIRI(id)}>`
@@ -617,4 +621,413 @@ class TurtleWriter {
 			.replace(/\r/g, '\\r')
 			.replace(/\t/g, '\\t')
 	}
+}
+
+
+export const turtlePatchWriter = async (source) => {
+	if (source.originalSource == null) {
+		throw new Error('Cannot generate a patch without the original graph source')
+	}
+
+	const currentSource = await turtleWriter(source)
+	const original = turtleParser(source.originalSource, source.url).quads
+	const current = turtleParser(currentSource, source.url).quads
+	const patch = solidPatchChanges(original, current, {
+		quad,
+		variable,
+		blankNode
+	})
+
+	return serializePatch(source, patch.inserts, patch.deletes, patch.where)
+}
+
+function diffQuads(original, current)
+{
+	const originalByKey = new Map(original.map(quad => [quadKey(quad), quad]))
+	const currentByKey = new Map(current.map(quad => [quadKey(quad), quad]))
+
+	const deletes = []
+	const inserts = []
+	for (const [key, quad] of originalByKey) {
+		if (!currentByKey.has(key)) {
+			deletes.push(quad)
+		}
+	}
+	for (const [key, quad] of currentByKey) {
+		if (!originalByKey.has(key)) {
+			inserts.push(quad)
+		}
+	}
+	return {inserts, deletes}
+}
+
+function quadKey(quad)
+{
+	return [
+		termKey(quad.subject),
+		termKey(quad.predicate),
+		termKey(quad.object)
+	].join(' ')
+}
+
+function termKey(term)
+{
+	if (!term) {
+		return ''
+	}
+	if (term.termType == 'Literal') {
+		return [
+			'Literal',
+			term.value,
+			term.language ?? '',
+			term.datatype?.id ?? ''
+		].join('\u0000')
+	}
+	return `${term.termType}\u0000${term.id ?? ''}`
+}
+
+function solidPatchChanges(original, current, factory)
+{
+	const originalAnonymous = anonymousUnits(original)
+	const currentAnonymous = anonymousUnits(current)
+	const {deletedUnits, insertedUnits} = diffAnonymousUnits(originalAnonymous.units, currentAnonymous.units)
+	const anonymousDeletes = []
+	const anonymousInserts = []
+	const where = []
+
+	for (const unit of deletedUnits) {
+		assertOwnedAnonymousUnit(unit, 'delete')
+		const variableQuads = mapBlankNodes(unit.quads, name => factory.variable(name), factory.quad, 'old')
+		where.push(...variableQuads)
+		anonymousDeletes.push(...variableQuads)
+	}
+
+	for (const unit of insertedUnits) {
+		assertOwnedAnonymousUnit(unit, 'insert')
+		anonymousInserts.push(...mapBlankNodes(unit.quads, name => factory.blankNode(name), factory.quad, 'insert'))
+	}
+
+	const plainOriginal = original.filter(quad => !originalAnonymous.quadKeys.has(quadKey(quad)))
+	const plainCurrent = current.filter(quad => !currentAnonymous.quadKeys.has(quadKey(quad)))
+	const plainDiff = diffQuads(plainOriginal, plainCurrent)
+
+	assertPatchable(plainDiff.inserts, 'insert changes outside an owned anonymous value')
+	assertPatchable(plainDiff.deletes, 'delete changes outside an owned anonymous value')
+
+	return {
+		where,
+		deletes: [...plainDiff.deletes, ...anonymousDeletes],
+		inserts: [...plainDiff.inserts, ...anonymousInserts]
+	}
+}
+
+function anonymousUnits(quads)
+{
+	const outgoing = blankSubjectIndex(quads)
+	const incoming = blankObjectIndex(quads)
+	const units = []
+	const quadKeys = new Set()
+
+	for (const edge of quads) {
+		if (!isBlankNode(edge.object) || isBlankNode(edge.subject)) {
+			continue
+		}
+		const closure = blankNodeClosure(edge.object, outgoing)
+		const canonical = canonicalBlankNode(edge.object, outgoing)
+		const unitQuads = [edge, ...closure.quads]
+		for (const quad of unitQuads) {
+			quadKeys.add(quadKey(quad))
+		}
+		units.push({
+			edge,
+			quads: unitQuads,
+			blankNodeIds: closure.blankNodeIds,
+			incoming,
+			cyclic: closure.cyclic || canonical.cyclic,
+			signature: [termKey(edge.subject), termKey(edge.predicate), canonical.key].join(' ')
+		})
+	}
+
+	return {units, quadKeys}
+}
+
+function blankSubjectIndex(quads)
+{
+	const index = new Map()
+	for (const quad of quads) {
+		if (!isBlankNode(quad.subject)) {
+			continue
+		}
+		const id = termValue(quad.subject)
+		if (!index.has(id)) {
+			index.set(id, [])
+		}
+		index.get(id).push(quad)
+	}
+	return index
+}
+
+function blankObjectIndex(quads)
+{
+	const index = new Map()
+	for (const quad of quads) {
+		if (!isBlankNode(quad.object)) {
+			continue
+		}
+		const id = termValue(quad.object)
+		if (!index.has(id)) {
+			index.set(id, [])
+		}
+		index.get(id).push(quad)
+	}
+	return index
+}
+
+function blankNodeClosure(root, outgoing)
+{
+	const blankNodeIds = new Set()
+	const quads = []
+	const stack = [root]
+	let cyclic = false
+
+	while (stack.length) {
+		const term = stack.pop()
+		const id = termValue(term)
+		if (blankNodeIds.has(id)) {
+			cyclic = true
+			continue
+		}
+		blankNodeIds.add(id)
+		for (const quad of outgoing.get(id) ?? []) {
+			quads.push(quad)
+			if (isBlankNode(quad.object)) {
+				stack.push(quad.object)
+			}
+		}
+	}
+
+	return {quads, blankNodeIds, cyclic}
+}
+
+function canonicalBlankNode(term, outgoing, memo=new Map(), path=new Set())
+{
+	const id = termValue(term)
+	if (memo.has(id)) {
+		return memo.get(id)
+	}
+	if (path.has(id)) {
+		return {key: '[cycle]', cyclic: true}
+	}
+
+	path.add(id)
+	let cyclic = false
+	const properties = (outgoing.get(id) ?? []).map(quad => {
+		const object = canonicalTerm(quad.object, outgoing, memo, path)
+		cyclic ||= object.cyclic
+		return `${termKey(quad.predicate)} ${object.key}`
+	}).sort()
+	path.delete(id)
+
+	const result = {
+		key: `BlankNode(${properties.join('|')})`,
+		cyclic
+	}
+	memo.set(id, result)
+	return result
+}
+
+function canonicalTerm(term, outgoing, memo, path)
+{
+	if (isBlankNode(term)) {
+		return canonicalBlankNode(term, outgoing, memo, path)
+	}
+	return {key: termKey(term), cyclic: false}
+}
+
+function diffAnonymousUnits(original, current)
+{
+	const originalBySignature = groupUnitsBySignature(original)
+	const currentBySignature = groupUnitsBySignature(current)
+	const signatures = new Set([...originalBySignature.keys(), ...currentBySignature.keys()])
+	const deletedUnits = []
+	const insertedUnits = []
+
+	for (const signature of signatures) {
+		const originalUnits = originalBySignature.get(signature) ?? []
+		const currentUnits = currentBySignature.get(signature) ?? []
+		const unchanged = Math.min(originalUnits.length, currentUnits.length)
+		deletedUnits.push(...originalUnits.slice(unchanged))
+		insertedUnits.push(...currentUnits.slice(unchanged))
+	}
+
+	return {deletedUnits, insertedUnits}
+}
+
+function groupUnitsBySignature(units)
+{
+	const grouped = new Map()
+	for (const unit of units) {
+		if (!grouped.has(unit.signature)) {
+			grouped.set(unit.signature, [])
+		}
+		grouped.get(unit.signature).push(unit)
+	}
+	return grouped
+}
+
+function assertOwnedAnonymousUnit(unit, operation)
+{
+	if (unit.cyclic) {
+		throw new Error(`Cannot generate a Solid PATCH to ${operation} a cyclic anonymous value; use graph.write() and PUT instead`)
+	}
+
+	for (const id of unit.blankNodeIds) {
+		const incoming = unit.incoming.get(id) ?? []
+		if (incoming.length != 1) {
+			throw new Error(`Cannot generate a Solid PATCH to ${operation} a shared anonymous value; use graph.write() and PUT instead`)
+		}
+	}
+}
+
+function mapBlankNodes(quads, createTerm, createQuad, prefix)
+{
+	const terms = new Map()
+	const mapTerm = term => {
+		if (!isBlankNode(term)) {
+			return term
+		}
+		const id = termValue(term)
+		if (!terms.has(id)) {
+			terms.set(id, createTerm(`${prefix}${terms.size}`))
+		}
+		return terms.get(id)
+	}
+	return quads.map(quad => createQuad(mapTerm(quad.subject), quad.predicate, mapTerm(quad.object)))
+}
+
+function assertPatchable(quads, operation)
+{
+	const hasBlankNode = quads.some(quad =>
+		isBlankNode(quad.subject)
+		|| isBlankNode(quad.predicate)
+		|| isBlankNode(quad.object)
+	)
+	if (hasBlankNode) {
+		throw new Error(`Cannot generate a Solid PATCH with blank nodes in ${operation}; use graph.write() and PUT instead`)
+	}
+}
+
+function isBlankNode(term)
+{
+	return term?.termType == 'BlankNode'
+}
+
+function termValue(term)
+{
+	return term?.id ?? term?.value ?? ''
+}
+
+function serializePatch(source, inserts, deletes, where=[])
+{
+	const prefixes = {
+		...source.prefixDeclarations('source'),
+		solid: 'http://www.w3.org/ns/solid/terms#'
+	}
+	const lines = []
+	for (const [prefix, iri] of Object.entries(prefixes)) {
+		lines.push(`@prefix ${prefix}: <${escapeIRI(iri)}> .`)
+	}
+	if (lines.length) {
+		lines.push('')
+	}
+
+	const predicates = []
+	if (where.length) {
+		predicates.push(`solid:where ${formula(source, where)}`)
+	}
+	if (deletes.length) {
+		predicates.push(`solid:deletes ${formula(source, deletes)}`)
+	}
+	if (inserts.length) {
+		predicates.push(`solid:inserts ${formula(source, inserts)}`)
+	}
+
+	let patch = `_:patch a solid:InsertDeletePatch`
+	if (predicates.length) {
+		patch += ';\n\t' + predicates.join(';\n\t')
+	}
+	lines.push(`${patch} .`)
+
+	return lines.join('\n')+'\n'
+}
+
+function formula(source, quads)
+{
+	if (!quads.length) {
+		return '{}'
+	}
+	const lines = quads.map(quad => `\n\t\t${quadToString(source, quad)}`)
+	return `{${lines.join('')}\n\t}`
+}
+
+function quadToString(source, quad)
+{
+	return `${termToString(source, quad.subject)} ${termToString(source, quad.predicate)} ${termToString(source, quad.object)} .`
+}
+
+function termToString(source, term)
+{
+	if (term.termType == 'Variable') {
+		return `?${term.id}`
+	}
+	if (term.termType == 'NamedNode') {
+		return resource(source, term.id)
+	}
+	if (term.termType == 'BlankNode') {
+		return `_:${term.id}`
+	}
+	if (term.termType == 'Literal') {
+		return literalToString(source, term)
+	}
+	throw new Error(`Cannot serialize unknown RDF term type: ${term.termType}`)
+}
+
+function literalToString(source, term)
+{
+	const quoted = `"${escapeString(String(term.value))}"`
+	if (term.language) {
+		return `${quoted}@${term.language}`
+	}
+	const datatype = term.datatype?.id
+	if (datatype && datatype != XSD+'string') {
+		return `${quoted}^^${resource(source, datatype)}`
+	}
+	return quoted
+}
+
+function resource(source, id)
+{
+	if (id == rdfType) {
+		return 'a'
+	}
+	const short = source.shortURI(id, ':')
+	if ((short != id && /^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short)) || /^:[^\s]*$/.test(short)) {
+		return short
+	}
+	return `<${escapeIRI(id)}>`
+}
+
+function escapeIRI(value)
+{
+	return String(value).replace(/\\/g, '\\\\').replace(/>/g, '\\>')
+}
+
+function escapeString(value)
+{
+	return value
+		.replace(/\\/g, '\\\\')
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, '\\n')
+		.replace(/\r/g, '\\r')
+		.replace(/\t/g, '\\t')
 }

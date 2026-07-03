@@ -6,11 +6,12 @@ This package is intentionally focused on the Turtle features that are common in 
 
 ```js
 import oldm from '@muze-nl/oldm-core'
-import { turtleParser, turtleWriter } from '@muze-labs/oldm-turtle'
+import { turtleParser, turtlePatchWriter, turtleWriter } from '@muze-labs/oldm-turtle'
 
 const context = oldm({
   parser: turtleParser,
-  writer: turtleWriter
+  writer: turtleWriter,
+  patchWriter: turtlePatchWriter
 })
 ```
 
@@ -26,9 +27,12 @@ Currently supported:
 - blank node labels
 - blank node property lists
 - collections
+- Solid N3 Patch output for named-node changes and owned anonymous value replacements
 - predicate lists and object lists
 - comments
 - relative IRI resolution
+
+Patch support follows the same conservative anonymous-value strategy as `@muze-nl/oldm-n3`: fresh blank nodes and collections can be inserted, existing owned blank nodes and collections are replaced as complete anonymous closures, and shared or cyclic anonymous values are rejected so callers can use full document replacement.
 
 Known limits in this experimental version:
 
