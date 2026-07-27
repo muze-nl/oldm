@@ -5,6 +5,10 @@ export default function oldm(options)
 
 export const rdfType = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
 
+export const aliases = {
+	'http://schema.org/': 'https://schema.org/'
+}
+
 export const prefixes = {
 	acl:    'http://www.w3.org/ns/auth/acl#',
 	acp:    'http://www.w3.org/ns/solid/acp#',
@@ -18,7 +22,7 @@ export const prefixes = {
 	pim:    'http://www.w3.org/ns/pim/space#',
 	rdf:    'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
 	rdfs:   'http://www.w3.org/2000/01/rdf-schema#',
-	schema: 'http://schema.org/',
+	schema: 'https://schema.org/',
 	solid:  'http://www.w3.org/ns/solid/terms#',
 	stat:   'http://www.w3.org/ns/posix/stat#',
 	turtle: 'http://www.w3.org/ns/iana/media-types/text/turtle#',
@@ -200,6 +204,7 @@ export class Context {
 		this.graphsByUrl = Object.create(null)
 		this.defaultGraph = options?.defaultGraph ?? null
 		this.separator = options?.separator ?? '$'
+		this.aliases = {...aliases, ...(options?.aliases ?? {})}
 
 		Object.defineProperty(this, 'subjects', {
 			get() {
@@ -525,12 +530,25 @@ export class Context {
 		if (!separator) {
 			separator = this.separator
 		}
+		fullURI = this.canonicalURI(fullURI)
 		for (const prefix of this.prefixOrder) {
-			if (fullURI.startsWith(this.prefixes[prefix])) {
-				return prefix + separator + fullURI.substring(this.prefixes[prefix].length)
+			const iri = this.canonicalURI(this.prefixes[prefix])
+			if (fullURI.startsWith(iri)) {
+				return prefix + separator + fullURI.substring(iri.length)
 			}
 		}
 		return fullURI
+	}
+
+	canonicalURI(uri)
+	{
+		uri = String(uri)
+		for (const [alias, canonical] of Object.entries(this.aliases)) {
+			if (uri.startsWith(alias)) {
+				return canonical + uri.substring(alias.length)
+			}
+		}
+		return uri
 	}
 
 	setType(literal, shortType)
@@ -894,9 +912,11 @@ export class Graph
 		if (!separator) {
 			separator = this.context.separator
 		}
+		fullURI = this.context.canonicalURI(fullURI)
 		for (const [prefix, iri] of this.prefixEntries(preference)) {
-			if (fullURI.startsWith(iri)) {
-				return prefix + separator + fullURI.substring(iri.length)
+			const canonicalIRI = this.context.canonicalURI(iri)
+			if (fullURI.startsWith(canonicalIRI)) {
+				return prefix + separator + fullURI.substring(canonicalIRI.length)
 			}
 		}
 		if (this.url && fullURI.startsWith(this.url)) {
