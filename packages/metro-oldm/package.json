@@ -47,6 +47,7 @@
     "/MUZE_ALIGNMENT.md"
   ],
   "dependencies": {
+    "@muze-nl/metro": "^0.8.0",
     "@muze-nl/oldm": "^0.7.1"
   },
   "targets": {
