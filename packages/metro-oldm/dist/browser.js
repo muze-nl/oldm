@@ -1809,7 +1809,7 @@
     }
   });
 
-  // ../../node_modules/@muze-nl/oldm-core/src/oldm.mjs
+  // ../oldm-core/src/oldm.mjs
   var oldm_exports = {};
   __export(oldm_exports, {
     BlankNode: () => BlankNode,
@@ -1817,6 +1817,7 @@
     Context: () => Context,
     Graph: () => Graph,
     NamedNode: () => NamedNode,
+    aliases: () => aliases,
     default: () => oldm,
     first: () => first,
     many: () => many,
@@ -1828,6 +1829,9 @@
     return new Context(options);
   }
   var rdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+  var aliases = {
+    "http://schema.org/": "https://schema.org/"
+  };
   var prefixes = {
     acl: "http://www.w3.org/ns/auth/acl#",
     acp: "http://www.w3.org/ns/solid/acp#",
@@ -1841,7 +1845,7 @@
     pim: "http://www.w3.org/ns/pim/space#",
     rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
     rdfs: "http://www.w3.org/2000/01/rdf-schema#",
-    schema: "http://schema.org/",
+    schema: "https://schema.org/",
     solid: "http://www.w3.org/ns/solid/terms#",
     stat: "http://www.w3.org/ns/posix/stat#",
     turtle: "http://www.w3.org/ns/iana/media-types/text/turtle#",
@@ -1984,10 +1988,12 @@
       }
       this.parser = options?.parser;
       this.writer = options?.writer;
+      this.patchWriter = options?.patchWriter;
       this.graphs = [];
       this.graphsByUrl = /* @__PURE__ */ Object.create(null);
       this.defaultGraph = options?.defaultGraph ?? null;
       this.separator = options?.separator ?? "$";
+      this.aliases = { ...aliases, ...options?.aliases ?? {} };
       Object.defineProperty(this, "subjects", {
         get() {
           return this.getSubjects();
@@ -2017,7 +2023,7 @@
           }
         }
       }
-      return this.addGraph(new Graph(quads, url, type, prefixes2, this));
+      return this.addGraph(new Graph(quads, url, type, prefixes2, this, input));
     }
     addGraph(graph) {
       if (!graph?.url) {
@@ -2039,17 +2045,17 @@
       return this.graphsByUrl[this.fullURI(url)];
     }
     set(subject, predicate, value, options = {}) {
-      return this.resolveGraph(subject, options).set(subject, predicate, value);
+      return this.resolveGraph(subject, options).set(subject, predicate, value, { prefixPreference: "context" });
     }
     add(subject, predicate, value, options = {}) {
-      return this.resolveGraph(subject, options).add(subject, predicate, value);
+      return this.resolveGraph(subject, options).add(subject, predicate, value, { prefixPreference: "context" });
     }
     delete(subject, predicate = null, value = void 0, options = {}) {
       const graph = this.resolveGraph(subject, options);
       if (arguments.length < 3) {
-        return graph.delete(subject, predicate);
+        return graph.delete(subject, predicate, void 0, { prefixPreference: "context", hasValue: false });
       }
-      return graph.delete(subject, predicate, value);
+      return graph.delete(subject, predicate, value, { prefixPreference: "context", hasValue: true });
     }
     resolveGraph(subject, options = {}) {
       if (options.graph) {
@@ -2136,7 +2142,7 @@
       if (!predicate) {
         return true;
       }
-      const property = this.propertyName(predicate);
+      const property = subject.graph instanceof Graph ? subject.graph.propertyName(this.fullURI(predicate), "context") : this.propertyName(predicate);
       if (!(property in subject)) {
         return false;
       }
@@ -2192,8 +2198,9 @@
         if (predicate == "id") {
           continue;
         }
-        target[predicate] = mergeValue(
-          target[predicate],
+        const contextPredicate = predicate == "a" ? "a" : this.propertyName(source.graph.fullURI(predicate, null, "source"));
+        target[contextPredicate] = mergeValue(
+          target[contextPredicate],
           resolveValue(value, subjects, this)
         );
       }
@@ -2241,12 +2248,23 @@
       if (!separator) {
         separator = this.separator;
       }
+      fullURI = this.canonicalURI(fullURI);
       for (const prefix of this.prefixOrder) {
-        if (fullURI.startsWith(this.prefixes[prefix])) {
-          return prefix + separator + fullURI.substring(this.prefixes[prefix].length);
+        const iri = this.canonicalURI(this.prefixes[prefix]);
+        if (fullURI.startsWith(iri)) {
+          return prefix + separator + fullURI.substring(iri.length);
         }
       }
       return fullURI;
+    }
+    canonicalURI(uri) {
+      uri = String(uri);
+      for (const [alias, canonical] of Object.entries(this.aliases)) {
+        if (uri.startsWith(alias)) {
+          return canonical + uri.substring(alias.length);
+        }
+      }
+      return uri;
     }
     setType(literal2, shortType) {
       if (!shortType) {
@@ -2272,11 +2290,12 @@
   };
   var Graph = class {
     #blankNodes = /* @__PURE__ */ Object.create(null);
-    constructor(quads, url, mimetype, prefixes2, context) {
+    constructor(quads, url, mimetype, prefixes2, context, originalSource = null) {
       this.mimetype = mimetype;
       this.url = url;
       this.prefixes = prefixes2;
       this.context = context;
+      this.originalSource = originalSource;
       this.subjects = /* @__PURE__ */ Object.create(null);
       for (let quad2 of quads) {
         let subject;
@@ -2339,28 +2358,89 @@
     write() {
       return this.context.writer(this);
     }
+    patch() {
+      if (!this.context.patchWriter) {
+        throw new Error("Cannot generate a patch without a configured patchWriter");
+      }
+      return this.context.patchWriter(this);
+    }
     get(shortID) {
       return this.subjects[this.fullURI(shortID)];
     }
-    set(subject, predicate, value) {
-      const node = this.ensureSubject(subject);
-      const property = this.context.propertyName(predicate);
-      if (property == "a") {
-        node.a = this.normalizeTypeValues(value);
+    prefixEntries(preference = "source") {
+      const sourcePrefixes = this.prefixes ?? {};
+      const sourceOrder = Object.keys(sourcePrefixes);
+      const contextPrefixes = this.context.prefixes ?? {};
+      const contextOrder = this.context.prefixOrder ?? Object.keys(contextPrefixes);
+      const entries = [];
+      const seen = /* @__PURE__ */ new Set();
+      const seenIRIs = /* @__PURE__ */ new Set();
+      const add = (prefixes2, order, skipKnownIRIs = false) => {
+        for (const prefix of order) {
+          if (!Object.prototype.hasOwnProperty.call(prefixes2, prefix)) {
+            continue;
+          }
+          const iri = prefixes2[prefix];
+          if (!seen.has(prefix) && (!skipKnownIRIs || !seenIRIs.has(iri))) {
+            entries.push([prefix, iri]);
+            seen.add(prefix);
+            seenIRIs.add(iri);
+          }
+        }
+        for (const prefix of Object.keys(prefixes2)) {
+          const iri = prefixes2[prefix];
+          if (!seen.has(prefix) && (!skipKnownIRIs || !seenIRIs.has(iri))) {
+            entries.push([prefix, iri]);
+            seen.add(prefix);
+            seenIRIs.add(iri);
+          }
+        }
+      };
+      if (preference == "context") {
+        add(contextPrefixes, contextOrder);
+        add(sourcePrefixes, sourceOrder, true);
       } else {
-        node[property] = this.normalizeValues(value);
+        add(sourcePrefixes, sourceOrder);
+        add(contextPrefixes, contextOrder, true);
+      }
+      return entries;
+    }
+    prefixDeclarations(preference = "source") {
+      return Object.fromEntries(this.prefixEntries(preference));
+    }
+    propertyName(predicate, preference = "source") {
+      if (predicate?.id) {
+        predicate = predicate.id;
+      }
+      const fullPredicate = this.fullURI(predicate, null, preference);
+      if (predicate == "a" || fullPredicate == rdfType) {
+        return "a";
+      }
+      return this.shortURI(fullPredicate, null, "source");
+    }
+    set(subject, predicate, value, options = {}) {
+      const preference = options.prefixPreference ?? "source";
+      const node = this.ensureSubject(subject, preference);
+      const property = this.propertyName(predicate, preference);
+      if (property == "a") {
+        node.a = this.normalizeTypeValues(value, preference);
+      } else {
+        node[property] = this.normalizeValues(value, preference);
       }
       return node;
     }
-    add(subject, predicate, value) {
-      const node = this.ensureSubject(subject);
-      const property = this.context.propertyName(predicate);
-      const newValue = property == "a" ? this.normalizeTypeValues(value) : this.normalizeValues(value);
+    add(subject, predicate, value, options = {}) {
+      const preference = options.prefixPreference ?? "source";
+      const node = this.ensureSubject(subject, preference);
+      const property = this.propertyName(predicate, preference);
+      const newValue = property == "a" ? this.normalizeTypeValues(value, preference) : this.normalizeValues(value, preference);
       node[property] = mergeValue(node[property], newValue);
       return node;
     }
-    delete(subject, predicate = null, value = void 0) {
-      const node = this.findSubject(subject);
+    delete(subject, predicate = null, value = void 0, options = {}) {
+      const preference = options.prefixPreference ?? "source";
+      const hasValue = options.hasValue ?? arguments.length >= 3;
+      const node = this.findSubject(subject, preference);
       if (!node) {
         return false;
       }
@@ -2373,15 +2453,15 @@
         }
         return true;
       }
-      const property = this.context.propertyName(predicate);
+      const property = this.propertyName(predicate, preference);
       if (!(property in node)) {
         return false;
       }
-      if (arguments.length < 3) {
+      if (!hasValue) {
         delete node[property];
         return true;
       }
-      const deleteValues = property == "a" ? values(this.normalizeTypeValues(value)) : values(this.normalizeValues(value));
+      const deleteValues = property == "a" ? values(this.normalizeTypeValues(value, preference)) : values(this.normalizeValues(value, preference));
       const remaining = values(node[property]).filter((item) => !deleteValues.some((deleteValue) => sameValue(item, deleteValue)));
       if (remaining.length == values(node[property]).length) {
         return false;
@@ -2395,7 +2475,7 @@
       }
       return true;
     }
-    ensureSubject(subject) {
+    ensureSubject(subject, preference = "source") {
       if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
         if (subject.graph !== this) {
           throw new Error("Cannot write a blank node into a different graph");
@@ -2405,26 +2485,26 @@
       if (subject instanceof NamedNode) {
         return this.addNamedNode(subject.id);
       }
-      return this.addNamedNode(this.fullURI(subject));
+      return this.addNamedNode(this.fullURI(subject, null, preference));
     }
-    findSubject(subject) {
+    findSubject(subject, preference = "source") {
       if (subject instanceof BlankNode && !(subject instanceof NamedNode)) {
         return subject.graph === this ? subject : null;
       }
-      const id = subject?.id ? subject.id : this.fullURI(subject);
+      const id = subject?.id ? subject.id : this.fullURI(subject, null, preference);
       return this.subjects[id];
     }
-    normalizeValues(value) {
+    normalizeValues(value, preference = "source") {
       if (Array.isArray(value) && !(value instanceof Collection)) {
-        return value.map((item) => this.normalizeValue(item));
+        return value.map((item) => this.normalizeValue(item, preference));
       }
-      return this.normalizeValue(value);
+      return this.normalizeValue(value, preference);
     }
-    normalizeValue(value) {
+    normalizeValue(value, preference = "source") {
       if (value instanceof Collection) {
         const collection = new Collection(this);
         for (const item of value) {
-          collection.push(this.normalizeValue(item));
+          collection.push(this.normalizeValue(item, preference));
         }
         return collection;
       }
@@ -2437,24 +2517,24 @@
         }
         return value;
       }
-      if (this.looksLikeURI(value)) {
-        return this.addNamedNode(this.fullURI(value));
+      if (this.looksLikeURI(value, preference)) {
+        return this.addNamedNode(this.fullURI(value, null, preference));
       }
       return value;
     }
-    normalizeTypeValues(value) {
+    normalizeTypeValues(value, preference = "source") {
       if (Array.isArray(value) && !(value instanceof Collection)) {
-        return value.map((item) => this.normalizeTypeValue(item));
+        return value.map((item) => this.normalizeTypeValue(item, preference));
       }
-      return this.normalizeTypeValue(value);
+      return this.normalizeTypeValue(value, preference);
     }
-    normalizeTypeValue(value) {
+    normalizeTypeValue(value, preference = "source") {
       if (value instanceof NamedNode) {
-        return this.shortURI(value.id);
+        return this.shortURI(value.id, null, "source");
       }
-      return this.shortURI(this.fullURI(value));
+      return this.shortURI(this.fullURI(value, null, preference), null, "source");
     }
-    looksLikeURI(value) {
+    looksLikeURI(value, preference = "source") {
       if (typeof value != "string") {
         return false;
       }
@@ -2462,30 +2542,31 @@
         return true;
       }
       const [prefix, path] = value.split(this.context.separator);
-      return Boolean(path && this.context.prefixes[prefix]);
+      return Boolean(path && this.prefixEntries(preference).some(([candidate]) => candidate == prefix));
     }
-    fullURI(shortURI, separator = null) {
+    fullURI(shortURI, separator = null, preference = "source") {
       if (!separator) {
         separator = this.context.separator;
       }
-      const [prefix, path] = shortURI.split(separator);
+      const [prefix, path] = String(shortURI).split(separator);
       if (path) {
-        if (this.context.prefixes[prefix]) {
-          return this.context.prefixes[prefix] + path;
-        }
-        if (this.prefixes[prefix]) {
-          return this.prefixes[prefix] + path;
+        for (const [candidate, iri] of this.prefixEntries(preference)) {
+          if (candidate == prefix) {
+            return iri + path;
+          }
         }
       }
       return shortURI;
     }
-    shortURI(fullURI, separator = null) {
+    shortURI(fullURI, separator = null, preference = "source") {
       if (!separator) {
         separator = this.context.separator;
       }
-      for (const prefix of this.context.prefixOrder) {
-        if (fullURI.startsWith(this.context.prefixes[prefix])) {
-          return prefix + separator + fullURI.substring(this.context.prefixes[prefix].length);
+      fullURI = this.context.canonicalURI(fullURI);
+      for (const [prefix, iri] of this.prefixEntries(preference)) {
+        const canonicalIRI = this.context.canonicalURI(iri);
+        if (fullURI.startsWith(canonicalIRI)) {
+          return prefix + separator + fullURI.substring(canonicalIRI.length);
         }
       }
       if (this.url && fullURI.startsWith(this.url)) {
@@ -2602,10 +2683,11 @@
     }
   };
 
-  // ../../node_modules/@muze-nl/oldm-n3/src/oldm-n3.mjs
+  // ../oldm-n3/src/oldm-n3.mjs
   var oldm_n3_exports = {};
   __export(oldm_n3_exports, {
     n3Parser: () => n3Parser,
+    n3PatchWriter: () => n3PatchWriter,
     n3Writer: () => n3Writer
   });
 
@@ -4818,7 +4900,9 @@
     return result;
   }
 
-  // ../../node_modules/@muze-nl/oldm-n3/src/oldm-n3.mjs
+  // ../oldm-n3/src/oldm-n3.mjs
+  var solidNamespace = "http://www.w3.org/ns/solid/terms#";
+  var rdfNamespace = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
   var n3Parser = (input, uri, type) => {
     const parser = new N3Parser({
       baseIRI: uri,
@@ -4835,7 +4919,7 @@
     return new Promise((resolve, reject) => {
       const writer = new N3Writer({
         format: source.mimetype,
-        prefixes: { ...source.prefixes }
+        prefixes: source.prefixDeclarations("source")
       });
       const xsd4 = source.prefixes.xsd;
       const { quad: quad2, namedNode: namedNode2, literal: literal2, blankNode: blankNode2 } = N3DataFactory_default;
@@ -4975,20 +5059,325 @@
       });
     });
   };
+  var n3PatchWriter = async (source) => {
+    if (source.originalSource == null) {
+      throw new Error("Cannot generate a patch without the original graph source");
+    }
+    const currentSource = await n3Writer(source);
+    const original = n3Parser(source.originalSource, source.url, source.mimetype).quads;
+    const current = n3Parser(currentSource, source.url, source.mimetype).quads;
+    const patch = solidPatchChanges(original, current, {
+      quad: N3DataFactory_default.quad,
+      variable: N3DataFactory_default.variable,
+      blankNode: N3DataFactory_default.blankNode
+    });
+    return serializePatch(source, patch.inserts, patch.deletes, patch.where);
+  };
+  function diffQuads(original, current) {
+    const originalByKey = new Map(original.map((quad2) => [quadKey(quad2), quad2]));
+    const currentByKey = new Map(current.map((quad2) => [quadKey(quad2), quad2]));
+    const deletes = [];
+    const inserts = [];
+    for (const [key, quad2] of originalByKey) {
+      if (!currentByKey.has(key)) {
+        deletes.push(quad2);
+      }
+    }
+    for (const [key, quad2] of currentByKey) {
+      if (!originalByKey.has(key)) {
+        inserts.push(quad2);
+      }
+    }
+    return { inserts, deletes };
+  }
+  function quadKey(quad2) {
+    return [
+      termKey(quad2.subject),
+      termKey(quad2.predicate),
+      termKey(quad2.object),
+      termKey(quad2.graph)
+    ].join(" ");
+  }
+  function termKey(term) {
+    if (!term) {
+      return "";
+    }
+    if (term.termType == "Literal") {
+      return [
+        "Literal",
+        term.value,
+        term.language ?? "",
+        term.datatype?.value ?? term.datatype?.id ?? ""
+      ].join("\0");
+    }
+    return `${term.termType}\0${term.value ?? term.id ?? ""}`;
+  }
+  function solidPatchChanges(original, current, factory) {
+    const originalAnonymous = anonymousUnits(original);
+    const currentAnonymous = anonymousUnits(current);
+    const { deletedUnits, insertedUnits } = diffAnonymousUnits(originalAnonymous.units, currentAnonymous.units);
+    const anonymousDeletes = [];
+    const anonymousInserts = [];
+    const where = [];
+    for (const unit of deletedUnits) {
+      assertOwnedAnonymousUnit(unit, "delete");
+      const variableQuads = mapBlankNodes(unit.quads, (name) => factory.variable(name), factory.quad, "old");
+      where.push(...variableQuads);
+      anonymousDeletes.push(...variableQuads);
+    }
+    for (const unit of insertedUnits) {
+      assertOwnedAnonymousUnit(unit, "insert");
+      anonymousInserts.push(...mapBlankNodes(unit.quads, (name) => factory.blankNode(name), factory.quad, "insert"));
+    }
+    const plainOriginal = original.filter((quad2) => !originalAnonymous.quadKeys.has(quadKey(quad2)));
+    const plainCurrent = current.filter((quad2) => !currentAnonymous.quadKeys.has(quadKey(quad2)));
+    const plainDiff = diffQuads(plainOriginal, plainCurrent);
+    assertPatchable(plainDiff.inserts, "insert changes outside an owned anonymous value");
+    assertPatchable(plainDiff.deletes, "delete changes outside an owned anonymous value");
+    return {
+      where,
+      deletes: [...plainDiff.deletes, ...anonymousDeletes],
+      inserts: [...plainDiff.inserts, ...anonymousInserts]
+    };
+  }
+  function anonymousUnits(quads) {
+    const outgoing = blankSubjectIndex(quads);
+    const incoming = blankObjectIndex(quads);
+    const units = [];
+    const quadKeys = /* @__PURE__ */ new Set();
+    for (const edge of quads) {
+      if (!isBlankNode(edge.object) || isBlankNode(edge.subject)) {
+        continue;
+      }
+      const closure = blankNodeClosure(edge.object, outgoing);
+      const canonical = canonicalBlankNode(edge.object, outgoing);
+      const unitQuads = [edge, ...closure.quads];
+      for (const quad2 of unitQuads) {
+        quadKeys.add(quadKey(quad2));
+      }
+      units.push({
+        edge,
+        quads: unitQuads,
+        blankNodeIds: closure.blankNodeIds,
+        incoming,
+        cyclic: closure.cyclic || canonical.cyclic,
+        signature: [termKey(edge.subject), termKey(edge.predicate), canonical.key].join(" ")
+      });
+    }
+    return { units, quadKeys };
+  }
+  function blankSubjectIndex(quads) {
+    const index = /* @__PURE__ */ new Map();
+    for (const quad2 of quads) {
+      if (!isBlankNode(quad2.subject)) {
+        continue;
+      }
+      const id = termValue(quad2.subject);
+      if (!index.has(id)) {
+        index.set(id, []);
+      }
+      index.get(id).push(quad2);
+    }
+    return index;
+  }
+  function blankObjectIndex(quads) {
+    const index = /* @__PURE__ */ new Map();
+    for (const quad2 of quads) {
+      if (!isBlankNode(quad2.object)) {
+        continue;
+      }
+      const id = termValue(quad2.object);
+      if (!index.has(id)) {
+        index.set(id, []);
+      }
+      index.get(id).push(quad2);
+    }
+    return index;
+  }
+  function blankNodeClosure(root, outgoing) {
+    const blankNodeIds = /* @__PURE__ */ new Set();
+    const quads = [];
+    const stack = [root];
+    let cyclic = false;
+    while (stack.length) {
+      const term = stack.pop();
+      const id = termValue(term);
+      if (blankNodeIds.has(id)) {
+        cyclic = true;
+        continue;
+      }
+      blankNodeIds.add(id);
+      for (const quad2 of outgoing.get(id) ?? []) {
+        quads.push(quad2);
+        if (isBlankNode(quad2.object)) {
+          stack.push(quad2.object);
+        }
+      }
+    }
+    return { quads, blankNodeIds, cyclic };
+  }
+  function canonicalBlankNode(term, outgoing, memo = /* @__PURE__ */ new Map(), path = /* @__PURE__ */ new Set()) {
+    const id = termValue(term);
+    if (memo.has(id)) {
+      return memo.get(id);
+    }
+    if (path.has(id)) {
+      return { key: "[cycle]", cyclic: true };
+    }
+    path.add(id);
+    let cyclic = false;
+    const properties = (outgoing.get(id) ?? []).map((quad2) => {
+      const object = canonicalTerm(quad2.object, outgoing, memo, path);
+      cyclic ||= object.cyclic;
+      return `${termKey(quad2.predicate)} ${object.key}`;
+    }).sort();
+    path.delete(id);
+    const result = {
+      key: `BlankNode(${properties.join("|")})`,
+      cyclic
+    };
+    memo.set(id, result);
+    return result;
+  }
+  function canonicalTerm(term, outgoing, memo, path) {
+    if (isBlankNode(term)) {
+      return canonicalBlankNode(term, outgoing, memo, path);
+    }
+    return { key: termKey(term), cyclic: false };
+  }
+  function diffAnonymousUnits(original, current) {
+    const originalBySignature = groupUnitsBySignature(original);
+    const currentBySignature = groupUnitsBySignature(current);
+    const signatures = /* @__PURE__ */ new Set([...originalBySignature.keys(), ...currentBySignature.keys()]);
+    const deletedUnits = [];
+    const insertedUnits = [];
+    for (const signature of signatures) {
+      const originalUnits = originalBySignature.get(signature) ?? [];
+      const currentUnits = currentBySignature.get(signature) ?? [];
+      const unchanged = Math.min(originalUnits.length, currentUnits.length);
+      deletedUnits.push(...originalUnits.slice(unchanged));
+      insertedUnits.push(...currentUnits.slice(unchanged));
+    }
+    return { deletedUnits, insertedUnits };
+  }
+  function groupUnitsBySignature(units) {
+    const grouped = /* @__PURE__ */ new Map();
+    for (const unit of units) {
+      if (!grouped.has(unit.signature)) {
+        grouped.set(unit.signature, []);
+      }
+      grouped.get(unit.signature).push(unit);
+    }
+    return grouped;
+  }
+  function assertOwnedAnonymousUnit(unit, operation) {
+    if (unit.cyclic) {
+      throw new Error(`Cannot generate a Solid PATCH to ${operation} a cyclic anonymous value; use graph.write() and PUT instead`);
+    }
+    for (const id of unit.blankNodeIds) {
+      const incoming = unit.incoming.get(id) ?? [];
+      if (incoming.length != 1) {
+        throw new Error(`Cannot generate a Solid PATCH to ${operation} a shared anonymous value; use graph.write() and PUT instead`);
+      }
+    }
+  }
+  function mapBlankNodes(quads, createTerm, createQuad, prefix) {
+    const terms = /* @__PURE__ */ new Map();
+    const mapTerm = (term) => {
+      if (!isBlankNode(term)) {
+        return term;
+      }
+      const id = termValue(term);
+      if (!terms.has(id)) {
+        terms.set(id, createTerm(`${prefix}${terms.size}`));
+      }
+      return terms.get(id);
+    };
+    return quads.map((quad2) => createQuad(mapTerm(quad2.subject), quad2.predicate, mapTerm(quad2.object), quad2.graph));
+  }
+  function assertPatchable(quads, operation) {
+    const hasBlankNode = quads.some(
+      (quad2) => isBlankNode(quad2.subject) || isBlankNode(quad2.predicate) || isBlankNode(quad2.object)
+    );
+    if (hasBlankNode) {
+      throw new Error(`Cannot generate a Solid PATCH with blank nodes in ${operation}; use graph.write() and PUT instead`);
+    }
+  }
+  function isBlankNode(term) {
+    return term?.termType == "BlankNode";
+  }
+  function termValue(term) {
+    return term?.value ?? term?.id ?? "";
+  }
+  function serializePatch(source, inserts, deletes, where = []) {
+    const prefixes2 = {
+      ...source.prefixDeclarations("source")
+    };
+    if (quadsUseNamespace([...where, ...deletes, ...inserts], rdfNamespace)) {
+      prefixes2.rdf ??= rdfNamespace;
+    }
+    prefixes2.solid = solidNamespace;
+    const writer = new N3Writer({
+      format: "text/turtle",
+      prefixes: prefixes2
+    });
+    const lines = [];
+    for (const [prefix, iri] of Object.entries(prefixes2)) {
+      lines.push(`@prefix ${prefix}: <${iri}> .`);
+    }
+    if (lines.length) {
+      lines.push("");
+    }
+    const predicates = [];
+    if (where.length) {
+      predicates.push(`solid:where ${formula(writer, where)}`);
+    }
+    if (deletes.length) {
+      predicates.push(`solid:deletes ${formula(writer, deletes)}`);
+    }
+    if (inserts.length) {
+      predicates.push(`solid:inserts ${formula(writer, inserts)}`);
+    }
+    let patch = `_:patch a solid:InsertDeletePatch`;
+    if (predicates.length) {
+      patch += ";\n	" + predicates.join(";\n	");
+    }
+    lines.push(`${patch} .`);
+    return lines.join("\n") + "\n";
+  }
+  function quadsUseNamespace(quads, namespace) {
+    return quads.some(
+      (quad2) => termUsesNamespace(quad2.subject, namespace) || termUsesNamespace(quad2.predicate, namespace) || termUsesNamespace(quad2.object, namespace)
+    );
+  }
+  function termUsesNamespace(term, namespace) {
+    return term?.termType == "NamedNode" && termValue(term).startsWith(namespace);
+  }
+  function formula(writer, quads) {
+    if (!quads.length) {
+      return "{}";
+    }
+    const lines = quads.map((quad2) => `
+		${writer.quadToString(quad2.subject, quad2.predicate, quad2.object).trim()}`);
+    return `{${lines.join("")}
+	}`;
+  }
 
-  // ../../node_modules/@muze-nl/oldm/src/index.mjs
+  // ../oldm/src/index.mjs
   var { default: _coreDefault, ...core } = oldm_exports;
   var oldm2 = {
     context(options = {}) {
       const {
         parser = n3Parser,
         writer = n3Writer,
+        patchWriter = n3PatchWriter,
         ...contextOptions
       } = options;
       return oldm({
         ...contextOptions,
         parser,
-        writer
+        writer,
+        patchWriter
       });
     },
     ...core,
@@ -5001,27 +5390,11 @@
   function oldmmw(options) {
     options = Object.assign({
       contentType: "text/turtle",
-      prefixes: {
-        "ldp": "http://www.w3.org/ns/ldp#",
-        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-        "dct": "http://purl.org/dc/terms/",
-        "stat": "http://www.w3.org/ns/posix/stat#",
-        "turtle": "http://www.w3.org/ns/iana/media-types/text/turtle#",
-        "schem": "https://schema.org/",
-        "solid": "http://www.w3.org/ns/solid/terms#",
-        "acl": "http://www.w3.org/ns/auth/acl#",
-        "pims": "http://www.w3.org/ns/pim/space#",
-        "vcard": "http://www.w3.org/2006/vcard/ns#",
-        "foaf": "http://xmlns.com/foaf/0.1/"
-      },
       parser: src_default.n3Parser,
       writer: src_default.n3Writer
     }, options);
-    if (!options.prefixes["ldp"]) {
-      options.prefixes["ldp"] = "http://www.w3.org/ns/ldp#";
-    }
-    const context = src_default.context(options);
-    return async function oldmmw2(req, next) {
+    const context = options.context ?? src_default.context(options);
+    async function oldmmw2(req, next) {
       if (!req.headers.get("Accept")) {
         req = req.with({
           headers: {
@@ -5059,7 +5432,9 @@
         }
       }
       return res;
-    };
+    }
+    oldmmw2.context = context;
+    return oldmmw2;
   }
   var mimetypes = [
     /^text\/turtle\b/,

@@ -4,26 +4,9 @@ export default function oldmmw(options)
 {
 	options = Object.assign({
 		contentType: 'text/turtle',
-		prefixes: {
-		    'ldp':    'http://www.w3.org/ns/ldp#',
-		    'rdf':    'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-		    'dct':    'http://purl.org/dc/terms/',
-		    'stat':   'http://www.w3.org/ns/posix/stat#',
-		    'turtle': 'http://www.w3.org/ns/iana/media-types/text/turtle#',
-		    'schem':  'https://schema.org/',
-		    'solid':  'http://www.w3.org/ns/solid/terms#',
-		    'acl':    'http://www.w3.org/ns/auth/acl#',
-		    'pims':   'http://www.w3.org/ns/pim/space#',
-		    'vcard':  'http://www.w3.org/2006/vcard/ns#',
-		    'foaf':   'http://xmlns.com/foaf/0.1/'
-		},
 		parser: oldm.n3Parser,
 		writer: oldm.n3Writer
 	}, options)
-
-	if (!options.prefixes['ldp']) {
-		options.prefixes['ldp'] = 'http://www.w3.org/ns/ldp#'
-	}
 
 	const context = options.context ?? oldm.context(options)
 

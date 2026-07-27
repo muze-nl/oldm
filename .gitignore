@@ -5,3 +5,4 @@ packages/oldm-core/.tap/*
 packages/oldm-n3/.tap/*
 packages/oldm-turtle/.tap/*
 packages/oldm-shape/.tap/*
+packages/metro-oldm/.tap/*
