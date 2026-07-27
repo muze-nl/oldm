@@ -171,6 +171,26 @@ tap.test('source graphs prefer source prefixes while context subjects prefer cli
 	t.end()
 })
 
+tap.test('schema.org http predicates use the canonical schema prefix', t => {
+	const me = namedNode(url)
+	const context = oldm({
+		parser: parserFor([
+			quad(me, namedNode('http://schema.org/name'), literal('Auke')),
+			quad(me, namedNode('https://schema.org/givenName'), literal('Auke'))
+		], {
+			schem: 'http://schema.org/'
+		})
+	})
+	const source = context.parse('', url, 'text/turtle')
+	const subject = context.get(url)
+
+	t.equal(String(source.primary['schema$name']), 'Auke')
+	t.equal(String(source.primary['schema$givenName']), 'Auke')
+	t.equal(String(subject['schema$name']), 'Auke')
+	t.equal(String(subject['schema$givenName']), 'Auke')
+	t.end()
+})
+
 tap.test('parse returns null primary when requested subject is absent', t => {
 	const quads = [
 		quad(namedNode('https://example.org/profile/card#other'), namedNode(`${vcard}fn`), literal('Other'))
