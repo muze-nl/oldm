@@ -1,6 +1,6 @@
 {
   "name": "@muze-labs/oldm-shape",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Small assert-style object shapes for validating JavaScript objects and mapping them to OLDM linked data objects.",
   "type": "module",
   "main": "src/oldm-shape.mjs",
@@ -20,14 +20,13 @@
   "author": "auke@muze.nl",
   "license": "MIT",
   "dependencies": {
-    "@muze-nl/assert": "^0.5.1",
+    "@muze-nl/assert": "^0.6.0",
     "@muze-nl/oldm-core": "^0.7.0"
   },
   "files": [
     "src/",
     "README.md",
-    "LICENSE",
-    "MUZE_ALIGNMENT.md"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20.0.0"

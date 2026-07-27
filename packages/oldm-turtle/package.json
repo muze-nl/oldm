@@ -1,6 +1,6 @@
 {
   "name": "@muze-labs/oldm-turtle",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Small Turtle 1.1 parser/writer adapter for OLDM",
   "type": "module",
   "main": "src/oldm-turtle.mjs",
