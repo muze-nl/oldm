@@ -18,14 +18,14 @@ let blankNodeId = 0
  * Defines a JavaScript object shape that can validate application data and map
  * it to and from OLDM objects.
  *
- * The optional type is written to and checked against the RDF type property `a`.
+ * The optional target is written to and checked against the RDF type property `a`.
  */
-export function shape(type, fields, options={})
+export function shape(target, fields, options={})
 {
-	if (arguments.length == 1 || isPlainObject(type)) {
+	if (arguments.length == 1 || isPlainObject(target)) {
 		options = fields ?? {}
-		fields = type
-		type = null
+		fields = target
+		target = null
 	}
 	if (!isPlainObject(fields)) {
 		throw new Error('shape() expects a field definition object')
@@ -35,7 +35,7 @@ export function shape(type, fields, options={})
 	const idEntry = fieldEntries.find(([, pattern]) => mappingMeta(pattern)?.kind == 'id')
 	const info = {
 		kind: 'shape',
-		type,
+		for: target,
 		fields,
 		options
 	}
@@ -49,14 +49,15 @@ export function shape(type, fields, options={})
 		enumerable: false
 	})
 
-	_shape.type = type
+	_shape.for = target
 	_shape.fields = fields
 	_shape.fails = (data, validateOptions={}) => validateShape(data, info, data, '', validateOptions)
 	_shape.validate = (data, validateOptions={}) => !_shape.fails(data, validateOptions)
 	_shape.assert = (data, validateOptions={}) => {
-		const problems = _shape.fails(data, validateOptions)
+		const { message, ...options } = validateOptions
+		const problems = _shape.fails(data, options)
 		if (problems) {
-			throw shapeError('OLDM shape validation failed', problems, data)
+			throw shapeError(message ?? 'OLDM shape validation failed', problems)
 		}
 		return data
 	}
@@ -242,7 +243,7 @@ function describeShape(info, ctx)
 	if (ctx.seen.has(info)) {
 		return {
 			kind: 'shape-ref',
-			type: info.type ?? null
+			for: info.for ?? null
 		}
 	}
 
@@ -255,7 +256,7 @@ function describeShape(info, ctx)
 
 	const descriptor = {
 		kind: 'shape',
-		type: info.type ?? null,
+		for: info.for ?? null,
 		fields,
 		options: describeOptions(info.options)
 	}
@@ -621,18 +622,18 @@ function toOldm(info, data, graph, options={}, idEntry)
 	const extra = options.extra ?? 'error'
 	const problems = validateShape(data, info, data, '', { extra })
 	if (problems) {
-		throw shapeError('OLDM shape validation failed', problems, data)
+		throw shapeError('OLDM shape validation failed', problems)
 	}
 
 	const prefixProblems = validatePrefixUse(info, data, graph)
 	if (prefixProblems) {
-		throw shapeError('OLDM shape prefix validation failed', prefixProblems, data)
+		throw shapeError('OLDM shape prefix validation failed', prefixProblems)
 	}
 
 	const subject = createSubject(info, data, graph, idEntry)
 
-	if (info.type) {
-		graph.set(subject, 'a', info.type)
+	if (info.for) {
+		graph.set(subject, 'a', info.for)
 	}
 
 	for (const [key, pattern] of Object.entries(info.fields)) {
@@ -661,9 +662,9 @@ function fromOldm(info, subject, options={})
 	if (!subject || typeof subject != 'object') {
 		throw new Error('fromOldm() expects an OLDM subject object')
 	}
-	if (info.type && options.requireType !== false && !hasType(subject, info.type)) {
-		const problems = [error('subject does not have the expected RDF type', subject.a, info.type, 'a')]
-		throw shapeError('OLDM shape conversion failed', problems, subject)
+	if (info.for && options.requireType !== false && !hasType(subject, info.for)) {
+		const problems = [error('subject does not have the expected RDF type', subject.a, info.for, 'a')]
+		throw shapeError('OLDM shape conversion failed', problems)
 	}
 
 	const data = {}
@@ -699,7 +700,7 @@ function fromOldm(info, subject, options={})
 		problems.push(...validation)
 	}
 	if (problems.length) {
-		throw shapeError('OLDM shape conversion failed', problems, subject)
+		throw shapeError('OLDM shape conversion failed', problems)
 	}
 
 	return data
@@ -716,8 +717,8 @@ function validatePrefixUse(info, data, graph)
 
 function validatePatternPrefixes(info, graph, path, problems)
 {
-	if (info.type) {
-		checkShortURIPrefix(info.type, graph, `${path}.type`, problems)
+	if (info.for) {
+		checkShortURIPrefix(info.for, graph, `${path}.for`, problems)
 	}
 	for (const [key, pattern] of Object.entries(info.fields)) {
 		checkPatternPrefixes(pattern, graph, appendPath(path, key), problems)
@@ -1051,12 +1052,11 @@ function appendPath(path, key)
 	return path ? `${path}.${key}` : key
 }
 
-function shapeError(message, problems, source)
+function shapeError(message, problems)
 {
 	return new Error(message, {
 		cause: {
-			problems,
-			source
+			issues: problems
 		}
 	})
 }

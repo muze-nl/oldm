@@ -65,6 +65,13 @@ tap.test('shape works as an assert-compatible validator', t => {
 
 	t.notOk(Contact.fails({...contact, extra: true}))
 	t.ok(Contact.fails({...contact, extra: true}, { extra: 'error' }))
+	try {
+		Contact.assert({...contact, name: ''}, { message: 'contact failed' })
+		t.fail('Contact.assert should throw when data does not match')
+	} catch (error) {
+		t.equal(error.message, 'contact failed')
+		t.equal(error.cause.issues[0].path, 'name')
+	}
 
 	t.end()
 })
@@ -75,7 +82,7 @@ tap.test('describe exposes a stable data-only shape descriptor', t => {
 	const descriptor = describe(Contact)
 
 	t.equal(descriptor.kind, 'shape')
-	t.equal(descriptor.type, 'vcard$Individual')
+	t.equal(descriptor.for, 'vcard$Individual')
 	t.equal(descriptor.portable, true)
 
 	t.same(descriptor.fields.id, {

@@ -95,7 +95,7 @@ const descriptor = describe(Contact)
 // simplified result:
 {
 	kind: 'shape',
-	type: 'vcard$Individual',
+	for: 'vcard$Individual',
 	portable: true,
 	fields: {
 		id: {
@@ -188,7 +188,7 @@ const Contact = shape('ex$Contact', {
 
 OLDM already includes common prefixes such as `rdf`, `rdfs`, `xsd`, `foaf`, `schema`, `vcard`, `solid`, and `acl`. Add your own project or vocabulary prefixes to the context before converting shapes.
 
-`toOldm()` validates prefix use before writing anything to the graph. It throws when a short URI uses an unknown prefix, including shape types, field predicates, typed literal datatypes, `id(uri())` values, and `uri()` values.
+`toOldm()` validates prefix use before writing anything to the graph. It throws when a short URI uses an unknown prefix, including shape targets, field predicates, typed literal datatypes, `id(uri())` values, and `uri()` values.
 
 ```js
 const Broken = shape('unknown$Thing', {
@@ -219,6 +219,13 @@ Each shape also exposes convenience methods:
 Contact.fails(contact)
 Contact.validate(contact)
 Contact.assert(contact)
+```
+
+`assert()` throws with the validation issues in `error.cause.issues`. Pass a `message`
+option when a caller wants to keep its own API boundary wording:
+
+```js
+Contact.assert(contact, { message: 'Contact data is invalid' })
 ```
 
 By default validation follows the existing assert style and ignores extra JavaScript object fields:
@@ -256,13 +263,13 @@ const descriptor = describe(Contact)
 const sameDescriptor = Contact.describe()
 ```
 
-The descriptor includes shape type, field keys, RDF predicates, id fields,
+The descriptor includes the shape target, field keys, RDF predicates, id fields,
 required/optional state, cardinality, value kinds, datatypes, nested shapes, and
 `portable` flags.
 
-### `shape(type?, fields, options?)`
+### `shape(for?, fields, options?)`
 
-Defines a shape. The optional `type` is mapped to the RDF type property `a`.
+Defines a shape. The optional `for` target is mapped to the RDF type property `a`.
 
 ```js
 const Person = shape('foaf$Person', {
@@ -390,7 +397,7 @@ Use these wrappers from `@muze-labs/oldm-shape` around mapped fields. Validators
 
 - validates the JavaScript object first
 - writes only fields declared by the shape
-- writes the shape type to `a` when one is defined
+- writes the shape target to `a` when one is defined
 - creates a named subject when an `id()` field is present
 - creates a blank node when no `id()` field is present
 - treats unknown JavaScript fields as an error by default
