@@ -35,24 +35,22 @@ export const n3Writer = (source) => {
 		const xsd = source.prefixes.xsd
 		const {quad, namedNode, literal, blankNode} = DataFactory
 
-		const writeClassNames = (id, subject) => {
+		const getClassPredicates = (subject) => {
+			const predicates = []
 			let classNames = subject.a
 			if (!classNames) {
-				return
+				return predicates
 			}
 			if (!Array.isArray(classNames)) {
 				classNames = [ classNames ]
 			}
-			if (classNames?.length) {
-				for(let name of classNames) {
-					name = source.fullURI(name)
-					writer.addQuad(quad(
-						namedNode(id),
-						namedNode(rdfType),
-						namedNode(name)
-					))
-				}
-			}			
+			for (const name of classNames) {
+				predicates.push({
+					predicate: namedNode(rdfType),
+					object: namedNode(source.fullURI(name))
+				})
+			}
+			return predicates
 		}
 
 		const writeProperties = (id, subject) => {
@@ -61,10 +59,6 @@ export const n3Writer = (source) => {
 			}
 			let preds = getPredicates(subject)
 			for (let pred of preds) {
-				if (pred.predicate.id=='id' || pred.predicate.id=='a') {
-					/* these are handled explicitly elsewhere */
-					continue
-				}
 				if (!Array.isArray(pred.object)) {
 					pred.object = [ pred.object ]
 				}
@@ -79,9 +73,12 @@ export const n3Writer = (source) => {
 		}
 
 		const getPredicates = (object) => {
-			let preds = []
+			let preds = getClassPredicates(object)
 			Object.entries(object).forEach(entry => {
 				const predicate = entry[0]
+				if (predicate == 'id' || predicate == 'a') {
+					return
+				}
 				let object = entry[1]
 				const fullPred = source.fullURI(predicate)
 				let pred = {
@@ -181,9 +178,6 @@ export const n3Writer = (source) => {
 
 		Object.entries(source.subjects).forEach(([id,subject]) => {
 			id = source.shortURI(id, ':')
-			
-			writeClassNames(id, subject)
-
 			writeProperties(id, subject)			
 		})
 

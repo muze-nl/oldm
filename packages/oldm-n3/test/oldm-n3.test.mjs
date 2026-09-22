@@ -167,6 +167,23 @@ tap.test('n3Writer serializes blank nodes as object values', async t => {
 	t.end()
 })
 
+tap.test('n3Writer preserves the type of a blank node', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+:me vcard:hasEmail [
+	a vcard:Email;
+	vcard:value <mailto:auke@example.org>
+].
+`)
+	const roundtripped = parse(await source.write())
+	const email = roundtripped.primary.vcard$hasEmail
+
+	t.equal(email.a, 'vcard$Email')
+	t.equal(email.vcard$value.id, 'mailto:auke@example.org')
+	t.end()
+})
+
 tap.test('n3PatchWriter serializes simple named-node changes as a Solid N3 Patch', async t => {
 	const source = parse(`
 @prefix : <#>.
