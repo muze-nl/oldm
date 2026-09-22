@@ -2051,12 +2051,13 @@ function sameValue(left, right) {
   return false;
 }
 function normalizeStringLiteral(value, graph) {
-  if (typeof value != "string" && !(value instanceof String) || value.language) {
+  if (typeof value != "string" && !(value instanceof String)) {
     return value;
   }
+  const defaultType = value.language ? "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString" : "http://www.w3.org/2001/XMLSchema#string";
   return literal(value, {
-    type: graph.fullURI(value.type ?? "http://www.w3.org/2001/XMLSchema#string"),
-    language: ""
+    type: graph.fullURI(value.type ?? defaultType),
+    language: value.language ?? ""
   });
 }
 function sameSourceValue(left, right) {

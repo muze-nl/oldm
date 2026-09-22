@@ -710,6 +710,24 @@ tap.test('graph delete with a retrieved value removes only that language variant
 	t.end()
 })
 
+tap.test('graph delete with an explicit language removes only that language variant', t => {
+	const source = contextFor([
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke')),
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'nl')),
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'en'))
+	]).parse('', url, 'text/turtle')
+	const dutchName = core.literal('Auke', {language: 'nl'})
+
+	t.equal(source.delete(url, 'vcard$fn', dutchName), true)
+	t.same(many(source.get(url).vcard$fn).map(value => [String(value), value.language ?? '']), [
+		['Auke', ''],
+		['Auke', 'en']
+	])
+	t.equal(dutchName.type, undefined)
+	t.equal(dutchName.language, 'nl')
+	t.end()
+})
+
 tap.test('graph delete with an ordinary string preserves other datatypes', t => {
 	const source = contextFor([
 		quad(namedNode(url), namedNode(`${vcard}bday`), literal('1972-09-20', `${xsd}date`))
