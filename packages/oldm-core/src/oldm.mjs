@@ -148,6 +148,17 @@ function sameValue(left, right)
 	return false
 }
 
+function normalizeStringLiteral(value, graph)
+{
+	if ((typeof value != 'string' && !(value instanceof String)) || value.language) {
+		return value
+	}
+	return literal(value, {
+		type: graph.fullURI(value.type ?? 'http://www.w3.org/2001/XMLSchema#string'),
+		language: ''
+	})
+}
+
 
 function sameSourceValue(left, right)
 {
@@ -833,11 +844,12 @@ export class Graph
 			return true
 		}
 
-		const deleteValues = property == 'a'
+		const deleteValues = (property == 'a'
 			? values(this.normalizeTypeValues(value, preference))
-			: values(this.normalizeValues(value, preference))
+			: values(this.normalizeValues(value, preference)))
+			.map(item => normalizeStringLiteral(item, this))
 		const remaining = values(node[property])
-			.filter(item => !deleteValues.some(deleteValue => sameValue(item, deleteValue)))
+			.filter(item => !deleteValues.some(deleteValue => sameValue(normalizeStringLiteral(item, this), deleteValue)))
 
 		if (remaining.length == values(node[property]).length) {
 			return false

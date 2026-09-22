@@ -667,6 +667,61 @@ tap.test('graph set, add and delete update only that graph', t => {
 	t.end()
 })
 
+tap.test('graph delete matches parsed untagged strings with ordinary values', t => {
+	for (const value of ['Auke', core.literal('Auke'), core.literal('Auke', {language: ''})]) {
+		const source = contextFor([
+			quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke'))
+		]).parse('', url, 'text/turtle')
+
+		t.equal(source.delete(url, 'vcard$fn', value), true)
+		t.equal(source.get(url).vcard$fn, undefined)
+	}
+	t.end()
+})
+
+tap.test('graph delete with an ordinary string preserves language variants', t => {
+	const source = contextFor([
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke')),
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'nl')),
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'en'))
+	]).parse('', url, 'text/turtle')
+
+	t.equal(source.delete(url, 'vcard$fn', 'Auke'), true)
+	t.same(many(source.get(url).vcard$fn).map(value => [String(value), value.language]), [
+		['Auke', 'nl'],
+		['Auke', 'en']
+	])
+	t.end()
+})
+
+tap.test('graph delete with a retrieved value removes only that language variant', t => {
+	const source = contextFor([
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke')),
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'nl')),
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'en'))
+	]).parse('', url, 'text/turtle')
+	const dutchName = source.get(url).vcard$fn.find(value => value.language == 'nl')
+
+	t.equal(source.delete(url, 'vcard$fn', dutchName), true)
+	t.same(many(source.get(url).vcard$fn).map(value => [String(value), value.language ?? '']), [
+		['Auke', ''],
+		['Auke', 'en']
+	])
+	t.end()
+})
+
+tap.test('graph delete with an ordinary string preserves other datatypes', t => {
+	const source = contextFor([
+		quad(namedNode(url), namedNode(`${vcard}bday`), literal('1972-09-20', `${xsd}date`))
+	]).parse('', url, 'text/turtle')
+	const birthday = source.get(url).vcard$bday
+
+	t.equal(source.delete(url, 'vcard$bday', '1972-09-20'), false)
+	t.equal(source.get(url).vcard$bday, birthday)
+	t.equal(birthday.type, 'xsd$date')
+	t.end()
+})
+
 tap.test('context set, add and delete can target an explicit graph', t => {
 	const profileUrl = 'https://example.org/profile/card#me'
 	const prefsUrl = 'https://example.org/profile/prefs#me'
