@@ -267,17 +267,26 @@ function solidPatchChanges(original, current, factory)
 	const anonymousDeletes = []
 	const anonymousInserts = []
 	const where = []
+	const originalTerms = new Map()
+	const replacementTerms = new Map()
 
 	for (const unit of deletedUnits) {
 		assertOwnedAnonymousUnit(unit, 'delete')
-		const variableQuads = mapBlankNodes(unit.quads, name => factory.variable(name), factory.quad, 'old')
+		const variableQuads = mapBlankNodes(
+			unit.quads, name => factory.variable(name), factory.quad,
+			'old', originalTerms
+		)
 		where.push(...variableQuads)
 		anonymousDeletes.push(...variableQuads)
 	}
 
 	for (const unit of insertedUnits) {
 		assertOwnedAnonymousUnit(unit, 'insert')
-		anonymousInserts.push(...mapBlankNodes(unit.quads, name => factory.blankNode(name), factory.quad, 'insert'))
+		const insertedQuads = mapBlankNodes(
+			unit.quads, name => factory.blankNode(name), factory.quad,
+			'insert', replacementTerms
+		)
+		anonymousInserts.push(...insertedQuads)
 	}
 
 	const plainOriginal = original.filter(quad => !originalAnonymous.quadKeys.has(quadKey(quad)))
@@ -462,9 +471,8 @@ function assertOwnedAnonymousUnit(unit, operation)
 	}
 }
 
-function mapBlankNodes(quads, createTerm, createQuad, prefix)
+function mapBlankNodes(quads, createTerm, createQuad, prefix, terms)
 {
-	const terms = new Map()
 	const mapTerm = term => {
 		if (!isBlankNode(term)) {
 			return term

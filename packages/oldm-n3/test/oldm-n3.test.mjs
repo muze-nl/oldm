@@ -275,6 +275,28 @@ tap.test('n3PatchWriter replaces an owned blank-node value as a Solid N3 Patch',
 	t.end()
 })
 
+tap.test('n3PatchWriter keeps independent blank-node changes distinct', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <https://schema.org/>.
+:me schema:homeLocation [schema:name "Amsterdam"];
+	schema:workLocation [schema:name "Utrecht"].
+`)
+	source.set(source.primary.schema$homeLocation, 'schema$name', 'Rotterdam')
+	source.set(source.primary.schema$workLocation, 'schema$name', 'Leiden')
+	const patch = await source.patch()
+	const references = Array.from(
+		patch.matchAll(/schema:(?:homeLocation|workLocation) (\S+) \./g),
+		match => match[1]
+	)
+	const oldNodes = new Set(references.filter(id => id.startsWith('?')))
+	const newNodes = new Set(references.filter(id => id.startsWith('_:')))
+
+	t.equal(oldNodes.size, 2, 'the original nodes have distinct variables')
+	t.equal(newNodes.size, 2, 'the replacement nodes have distinct identifiers')
+	t.end()
+})
+
 tap.test('n3PatchWriter replaces an RDF collection as a whole anonymous value', async t => {
 	const source = parse(`
 @prefix : <#>.
