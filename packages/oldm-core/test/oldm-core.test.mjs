@@ -667,6 +667,53 @@ tap.test('graph set, add and delete update only that graph', t => {
 	t.end()
 })
 
+tap.test('graph add does not duplicate a parsed untagged string', t => {
+	for (const value of ['Auke', core.literal('Auke'), core.literal('Auke', {language: ''})]) {
+		const source = contextFor([
+			quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke'))
+		]).parse('', url, 'text/turtle')
+		const original = source.get(url).vcard$fn
+
+		source.add(url, 'vcard$fn', value)
+
+		t.equal(source.get(url).vcard$fn, original)
+	}
+	t.end()
+})
+
+tap.test('graph add deduplicates the same language and preserves other variants', t => {
+	const source = contextFor([
+		quad(namedNode(url), namedNode(`${vcard}fn`), literal('Auke', `${rdf}langString`, 'nl'))
+	]).parse('', url, 'text/turtle')
+	const original = source.get(url).vcard$fn
+
+	source.add(url, 'vcard$fn', core.literal('Auke', {language: 'nl'}))
+	t.equal(source.get(url).vcard$fn, original)
+
+	source.add(url, 'vcard$fn', core.literal('Auke', {language: 'en'}))
+	source.add(url, 'vcard$fn', 'Auke')
+	t.same(many(source.get(url).vcard$fn).map(value => [String(value), value.language ?? '']), [
+		['Auke', 'nl'],
+		['Auke', 'en'],
+		['Auke', '']
+	])
+	t.end()
+})
+
+tap.test('graph add preserves different datatypes for the same text', t => {
+	const source = contextFor([
+		quad(namedNode(url), namedNode(`${vcard}bday`), literal('1972-09-20', `${xsd}date`))
+	]).parse('', url, 'text/turtle')
+
+	source.add(url, 'vcard$bday', '1972-09-20')
+
+	t.same(many(source.get(url).vcard$bday).map(value => [String(value), value.type]), [
+		['1972-09-20', 'xsd$date'],
+		['1972-09-20', undefined]
+	])
+	t.end()
+})
+
 tap.test('graph delete matches parsed untagged strings with ordinary values', t => {
 	for (const value of ['Auke', core.literal('Auke'), core.literal('Auke', {language: ''})]) {
 		const source = contextFor([

@@ -2014,10 +2014,11 @@ function values(value) {
   }
   return [value];
 }
-function mergeValue(existing, value) {
+function mergeValue(existing, value, graph = null) {
   const result = values(existing);
   for (const item of values(value)) {
-    if (!result.some((existingItem) => sameValue(existingItem, item))) {
+    const comparable = normalizeStringLiteral(item, graph);
+    if (!result.some((existingItem) => sameValue(normalizeStringLiteral(existingItem, graph), comparable))) {
       result.push(item);
     }
   }
@@ -2051,7 +2052,7 @@ function sameValue(left, right) {
   return false;
 }
 function normalizeStringLiteral(value, graph) {
-  if (typeof value != "string" && !(value instanceof String)) {
+  if (!graph || typeof value != "string" && !(value instanceof String)) {
     return value;
   }
   const defaultType = value.language ? "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString" : "http://www.w3.org/2001/XMLSchema#string";
@@ -2580,7 +2581,7 @@ var Graph = class {
     const node = this.ensureSubject(subject, preference);
     const property = this.propertyName(predicate, preference);
     const newValue = property == "a" ? this.normalizeTypeValues(value, preference) : this.normalizeValues(value, preference);
-    node[property] = mergeValue(node[property], newValue);
+    node[property] = mergeValue(node[property], newValue, this);
     return node;
   }
   delete(subject, predicate = null, value = void 0, options = {}) {

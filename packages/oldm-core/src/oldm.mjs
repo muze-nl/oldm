@@ -105,11 +105,12 @@ function values(value)
 	return [value]
 }
 
-function mergeValue(existing, value)
+function mergeValue(existing, value, graph=null)
 {
 	const result = values(existing)
 	for (const item of values(value)) {
-		if (!result.some(existingItem => sameValue(existingItem, item))) {
+		const comparable = normalizeStringLiteral(item, graph)
+		if (!result.some(existingItem => sameValue(normalizeStringLiteral(existingItem, graph), comparable))) {
 			result.push(item)
 		}
 	}
@@ -150,7 +151,7 @@ function sameValue(left, right)
 
 function normalizeStringLiteral(value, graph)
 {
-	if (typeof value != 'string' && !(value instanceof String)) {
+	if (!graph || (typeof value != 'string' && !(value instanceof String))) {
 		return value
 	}
 	const defaultType = value.language
@@ -814,7 +815,7 @@ export class Graph
 			? this.normalizeTypeValues(value, preference)
 			: this.normalizeValues(value, preference)
 
-		node[property] = mergeValue(node[property], newValue)
+		node[property] = mergeValue(node[property], newValue, this)
 		return node
 	}
 
