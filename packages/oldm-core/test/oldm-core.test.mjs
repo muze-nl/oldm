@@ -248,6 +248,27 @@ tap.test('parse resolves object references, blank nodes, collections, language a
 	t.end()
 })
 
+tap.test('parse resolves a collection referenced before its list triples', t => {
+	const listA = blankNode('list-a')
+	const listB = blankNode('list-b')
+	const quads = [
+		quad(namedNode(url), namedNode(`${schema}knowsAbout`), listA),
+		quad(listA, namedNode(`${rdf}first`), literal('web')),
+		quad(listA, namedNode(`${rdf}rest`), listB),
+		quad(listB, namedNode(`${rdf}first`), literal('solid')),
+		quad(listB, namedNode(`${rdf}rest`), namedNode(`${rdf}nil`))
+	]
+	for (const orderedQuads of [quads, [...quads].reverse()]) {
+		const source = contextFor(orderedQuads).parse('', url, 'text/turtle')
+		const collection = source.primary.schema$knowsAbout
+
+		t.ok(collection instanceof Collection)
+		t.equal(collection.graph, source)
+		t.same(Array.from(collection, String), ['web', 'solid'])
+	}
+	t.end()
+})
+
 tap.test('custom separator changes shortened predicate and type names', t => {
 	const me = namedNode(url)
 	const quads = [

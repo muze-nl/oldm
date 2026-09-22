@@ -4,6 +4,8 @@ export default function oldm(options)
 }
 
 export const rdfType = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+const rdfFirst = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'
+const rdfRest = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'
 
 export const aliases = {
 	'http://schema.org/': 'https://schema.org/'
@@ -589,29 +591,14 @@ export class Graph
 		this.context  = context
 		this.originalSource = originalSource
 		this.subjects = Object.create(null)
+		this.#readCollections(quads)
 		for (let quad of quads) {
 			let subject
 			if (quad.subject.termType=='BlankNode') {
-				let shortPred = this.shortURI(quad.predicate.id,':')
-				let shortObj
-				switch(shortPred) {
-					case 'rdf:first':
-						subject = this.addCollection(quad.subject.id)
-						shortObj = quad.object.id ? this.shortURI(quad.object.id, ':') : null
-						if (shortObj!='rdf:nil') {
-							const value = this.getValue(quad.object)
-							if (value) {
-								subject.push(value)
-							}
-						}
+				if (quad.predicate.id == rdfFirst || quad.predicate.id == rdfRest) {
 					continue
-					case 'rdf:rest':
-						this.#blankNodes[quad.object.id] = this.#blankNodes[quad.subject.id]
-					continue
-					default:
-						subject = this.addBlankNode(quad.subject.id)
-					break
 				}
+				subject = this.addBlankNode(quad.subject.id)
 			} else {
 				subject = this.addNamedNode(quad.subject.id)
 			}
@@ -627,6 +614,41 @@ export class Graph
 				return Object.values(this.subjects)
 			}
 		})
+	}
+
+	#readCollections(quads)
+	{
+		const first = new Map()
+		const rest = new Map()
+		for (const quad of quads) {
+			if (quad.subject.termType != 'BlankNode') {
+				continue
+			}
+			if (quad.predicate.id == rdfFirst) {
+				first.set(quad.subject.id, quad.object)
+			}
+			else if (quad.predicate.id == rdfRest) {
+				rest.set(quad.subject.id, quad.object.id)
+			}
+		}
+
+		const collections = new Map()
+		for (const quad of quads) {
+			if (quad.object.termType == 'BlankNode'
+				&& quad.predicate.id != rdfRest && first.has(quad.object.id)) {
+				collections.set(quad.object.id, this.addCollection(quad.object.id))
+			}
+		}
+
+		for (const [head, collection] of collections) {
+			const visited = new Set()
+			let id = head
+			while (first.has(id) && !visited.has(id)) {
+				visited.add(id)
+				collection.push(this.getValue(first.get(id)))
+				id = rest.get(id)
+			}
+		}
 	}
 
 	addNamedNode(uri)
