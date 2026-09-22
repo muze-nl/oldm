@@ -42,6 +42,23 @@ const context = oldm({
 ```
 
 
+## Literal values
+
+Create a literal independently of any graph:
+
+```javascript
+const name = oldm.literal('Auke', { language: 'nl-NL' })
+const plainName = oldm.literal('Auke', { language: '' })
+const birthday = oldm.literal('1972-09-20', { type: 'xsd$date' })
+const text = oldm.literal('https://example.org/')
+```
+
+The helper creates a fresh boxed string or number, preserving optional language
+and datatype metadata. URL-shaped text remains a literal when passed to graph
+write helpers. Core users can import `{ literal }` from `@muze-nl/oldm-core`.
+See the [literal reference](packages/oldm-core/README.md#literal-values) for
+options and compatibility with existing `graph.setLanguage()` calls.
+
 ## Prefix preference
 
 OLDM shortens predicate and type IRIs with the prefixes configured on the context. Prefix declarations found in Turtle input are parser conveniences; they do not decide the JavaScript property names exposed by OLDM.

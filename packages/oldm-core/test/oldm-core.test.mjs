@@ -1,4 +1,5 @@
 import tap from 'tap'
+import * as core from '@muze-nl/oldm-core'
 import oldm, {
 	BlankNode,
 	Collection,
@@ -67,6 +68,49 @@ tap.test('default and named exports expose the core public API', t => {
 	t.equal(typeof Collection, 'function')
 	t.equal(rdfType, `${rdf}type`)
 
+	t.end()
+})
+
+tap.test('literal creates a language-tagged value without a graph', t => {
+	const value = core.literal('Auke', {language: 'nl-NL'})
+
+	t.equal(String(value), 'Auke')
+	t.equal(value.language, 'nl-NL')
+	t.end()
+})
+
+tap.test('literal preserves an explicit no-language option', t => {
+	const value = core.literal('Auke', {language: ''})
+
+	t.equal(String(value), 'Auke')
+	t.equal(value.language, '')
+	t.end()
+})
+
+tap.test('literal creates a typed value without a graph', t => {
+	const value = core.literal('1972-09-20', {type: 'xsd$date'})
+
+	t.equal(String(value), '1972-09-20')
+	t.equal(value.type, 'xsd$date')
+	t.end()
+})
+
+tap.test('literal copies existing metadata without changing the input', t => {
+	const original = core.literal('Auke', {type: 'rdf$langString', language: 'nl'})
+	const copy = core.literal(original, {language: 'en'})
+
+	t.not(copy, original)
+	t.equal(copy.type, 'rdf$langString')
+	t.equal(copy.language, 'en')
+	t.equal(original.language, 'nl')
+	t.end()
+})
+
+tap.test('literal supports numeric values', t => {
+	const value = core.literal(42, {type: 'xsd$integer'})
+
+	t.equal(Number(value), 42)
+	t.equal(value.type, 'xsd$integer')
 	t.end()
 })
 
@@ -312,6 +356,8 @@ tap.test('literal metadata helpers set and read datatypes and languages', t => {
 	t.equal(Number(numericName), 42)
 	t.equal(numericName.language, 'en')
 	t.equal(source.getType('plain'), null)
+	t.equal(source.setLanguage(name, 'en'), name)
+	t.equal(name.language, 'en')
 	t.throws(() => source.setType(true, `${xsd}boolean`), /cannot set type/)
 	t.throws(() => source.setLanguage(true, 'nl'), /cannot set language/)
 

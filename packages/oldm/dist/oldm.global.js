@@ -1917,8 +1917,10 @@
     Context: () => Context,
     Graph: () => Graph,
     NamedNode: () => NamedNode,
+    aliases: () => aliases,
     default: () => oldm,
     first: () => first,
+    literal: () => literal,
     many: () => many,
     one: () => one,
     prefixes: () => prefixes,
@@ -1928,6 +1930,11 @@
     return new Context(options);
   }
   var rdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+  var rdfFirst = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+  var rdfRest = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+  var aliases = {
+    "http://schema.org/": "https://schema.org/"
+  };
   var prefixes = {
     acl: "http://www.w3.org/ns/auth/acl#",
     acp: "http://www.w3.org/ns/solid/acp#",
@@ -1941,13 +1948,32 @@
     pim: "http://www.w3.org/ns/pim/space#",
     rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
     rdfs: "http://www.w3.org/2000/01/rdf-schema#",
-    schema: "http://schema.org/",
+    schema: "https://schema.org/",
     solid: "http://www.w3.org/ns/solid/terms#",
     stat: "http://www.w3.org/ns/posix/stat#",
     turtle: "http://www.w3.org/ns/iana/media-types/text/turtle#",
     vcard: "http://www.w3.org/2006/vcard/ns#",
     xsd: "http://www.w3.org/2001/XMLSchema#"
   };
+  function literal(value, options = {}) {
+    let result;
+    if (typeof value == "string" || value instanceof String) {
+      result = new String(value);
+    } else if (typeof value == "number" || value instanceof Number) {
+      result = new Number(value);
+    } else {
+      throw new TypeError("literal expects a string or number");
+    }
+    const type = options.type ?? value?.type;
+    const language = options.language ?? value?.language;
+    if (type !== void 0) {
+      result.type = type;
+    }
+    if (language !== void 0) {
+      result.language = language;
+    }
+    return result;
+  }
   function one(values2, whichOne = "last") {
     let result = values2;
     if (Array.isArray(values2)) {
@@ -2089,6 +2115,7 @@
       this.graphsByUrl = /* @__PURE__ */ Object.create(null);
       this.defaultGraph = options?.defaultGraph ?? null;
       this.separator = options?.separator ?? "$";
+      this.aliases = { ...aliases, ...options?.aliases ?? {} };
       Object.defineProperty(this, "subjects", {
         get() {
           return this.getSubjects();
@@ -2344,31 +2371,42 @@
       if (!separator) {
         separator = this.separator;
       }
+      fullURI = this.canonicalURI(fullURI);
       for (const prefix of this.prefixOrder) {
-        if (fullURI.startsWith(this.prefixes[prefix])) {
-          return prefix + separator + fullURI.substring(this.prefixes[prefix].length);
+        const iri = this.canonicalURI(this.prefixes[prefix]);
+        if (fullURI.startsWith(iri)) {
+          return prefix + separator + fullURI.substring(iri.length);
         }
       }
       return fullURI;
     }
-    setType(literal2, shortType) {
-      if (!shortType) {
-        return literal2;
+    canonicalURI(uri) {
+      uri = String(uri);
+      for (const [alias, canonical] of Object.entries(this.aliases)) {
+        if (uri.startsWith(alias)) {
+          return canonical + uri.substring(alias.length);
+        }
       }
-      if (typeof literal2 == "string") {
-        literal2 = new String(literal2);
-      } else if (typeof literal2 == "number") {
-        literal2 = new Number(literal2);
-      }
-      if (typeof literal2 !== "object") {
-        throw new Error("cannot set type on ", literal2, shortType);
-      }
-      literal2.type = shortType;
-      return literal2;
+      return uri;
     }
-    getType(literal2) {
-      if (literal2 && typeof literal2 == "object") {
-        return literal2.type;
+    setType(literal3, shortType) {
+      if (!shortType) {
+        return literal3;
+      }
+      if (typeof literal3 == "string") {
+        literal3 = new String(literal3);
+      } else if (typeof literal3 == "number") {
+        literal3 = new Number(literal3);
+      }
+      if (typeof literal3 !== "object") {
+        throw new Error("cannot set type on ", literal3, shortType);
+      }
+      literal3.type = shortType;
+      return literal3;
+    }
+    getType(literal3) {
+      if (literal3 && typeof literal3 == "object") {
+        return literal3.type;
       }
       return null;
     }
@@ -2382,29 +2420,14 @@
       this.context = context;
       this.originalSource = originalSource;
       this.subjects = /* @__PURE__ */ Object.create(null);
+      this.#readCollections(quads);
       for (let quad2 of quads) {
         let subject;
         if (quad2.subject.termType == "BlankNode") {
-          let shortPred = this.shortURI(quad2.predicate.id, ":");
-          let shortObj;
-          switch (shortPred) {
-            case "rdf:first":
-              subject = this.addCollection(quad2.subject.id);
-              shortObj = quad2.object.id ? this.shortURI(quad2.object.id, ":") : null;
-              if (shortObj != "rdf:nil") {
-                const value = this.getValue(quad2.object);
-                if (value) {
-                  subject.push(value);
-                }
-              }
-              continue;
-            case "rdf:rest":
-              this.#blankNodes[quad2.object.id] = this.#blankNodes[quad2.subject.id];
-              continue;
-            default:
-              subject = this.addBlankNode(quad2.subject.id);
-              break;
+          if (quad2.predicate.id == rdfFirst || quad2.predicate.id == rdfRest) {
+            continue;
           }
+          subject = this.addBlankNode(quad2.subject.id);
         } else {
           subject = this.addNamedNode(quad2.subject.id);
         }
@@ -2420,6 +2443,35 @@
           return Object.values(this.subjects);
         }
       });
+    }
+    #readCollections(quads) {
+      const first2 = /* @__PURE__ */ new Map();
+      const rest = /* @__PURE__ */ new Map();
+      for (const quad2 of quads) {
+        if (quad2.subject.termType != "BlankNode") {
+          continue;
+        }
+        if (quad2.predicate.id == rdfFirst) {
+          first2.set(quad2.subject.id, quad2.object);
+        } else if (quad2.predicate.id == rdfRest) {
+          rest.set(quad2.subject.id, quad2.object.id);
+        }
+      }
+      const collections = /* @__PURE__ */ new Map();
+      for (const quad2 of quads) {
+        if (quad2.object.termType == "BlankNode" && quad2.predicate.id != rdfRest && first2.has(quad2.object.id)) {
+          collections.set(quad2.object.id, this.addCollection(quad2.object.id));
+        }
+      }
+      for (const [head, collection] of collections) {
+        const visited = /* @__PURE__ */ new Set();
+        let id = head;
+        while (first2.has(id) && !visited.has(id)) {
+          visited.add(id);
+          collection.push(this.getValue(first2.get(id)));
+          id = rest.get(id);
+        }
+      }
     }
     addNamedNode(uri) {
       let absURI = new URL(uri, this.url).href;
@@ -2647,9 +2699,11 @@
       if (!separator) {
         separator = this.context.separator;
       }
+      fullURI = this.context.canonicalURI(fullURI);
       for (const [prefix, iri] of this.prefixEntries(preference)) {
-        if (fullURI.startsWith(iri)) {
-          return prefix + separator + fullURI.substring(iri.length);
+        const canonicalIRI = this.context.canonicalURI(iri);
+        if (fullURI.startsWith(canonicalIRI)) {
+          return prefix + separator + fullURI.substring(canonicalIRI.length);
         }
       }
       if (this.url && fullURI.startsWith(this.url)) {
@@ -2660,27 +2714,25 @@
     /**
      * This sets the type of a literal, usually one of the xsd types
      */
-    setType(literal2, type) {
+    setType(literal3, type) {
       const shortType = this.shortURI(type);
-      return this.context.setType(literal2, shortType);
+      return this.context.setType(literal3, shortType);
     }
     /**
      * This returns the type of a literal, or null
      */
-    getType(literal2) {
-      return this.context.getType(literal2);
+    getType(literal3) {
+      return this.context.getType(literal3);
     }
-    setLanguage(literal2, language) {
-      if (typeof literal2 == "string") {
-        literal2 = new String(literal2);
-      } else if (typeof literal2 == "number") {
-        literal2 = new Number(literal2);
+    setLanguage(value, language) {
+      if (typeof value == "string" || typeof value == "number") {
+        value = literal(value);
       }
-      if (typeof literal2 !== "object") {
-        throw new Error("cannot set language on ", literal2);
+      if (typeof value !== "object") {
+        throw new Error("cannot set language on ", value);
       }
-      literal2.language = language;
-      return literal2;
+      value.language = language;
+      return value;
     }
     getValue(object) {
       let result;
@@ -2692,7 +2744,7 @@
         }
         let language = object.language;
         if (language) {
-          result = this.setLanguage(result, language);
+          result = literal(result, { language });
         }
       } else if (object.termType == "BlankNode") {
         result = this.addBlankNode(object.id);
@@ -3270,7 +3322,7 @@
     namedNode,
     blankNode,
     variable,
-    literal,
+    literal: literal2,
     defaultGraph,
     quad,
     triple: quad,
@@ -3449,7 +3501,7 @@
   function blankNode(name) {
     return new BlankNode2(name || `n3-${_blankNodeCounter++}`);
   }
-  function literal(value, languageOrDataType) {
+  function literal2(value, languageOrDataType) {
     if (typeof languageOrDataType === "string")
       return new Literal(`"${value}"@${languageOrDataType.toLowerCase()}`);
     if (languageOrDataType !== void 0 && !("termType" in languageOrDataType)) {
@@ -3493,7 +3545,7 @@
       case "DefaultGraph":
         return DEFAULTGRAPH;
       case "Literal":
-        return literal(term.value, term.language || term.datatype);
+        return literal2(term.value, term.language || term.datatype);
       case "Quad":
         return fromQuad(term);
       default:
@@ -3981,7 +4033,7 @@
     }
     // ### `_completeLiteral` completes a literal with an optional datatype or language
     _completeLiteral(token, component) {
-      let literal2 = this._factory.literal(this._literalValue);
+      let literal3 = this._factory.literal(this._literalValue);
       let readCb;
       switch (token.type) {
         case "type":
@@ -3992,19 +4044,19 @@
           if (datatype.value === IRIs_default.rdf.langString || datatype.value === IRIs_default.rdf.dirLangString) {
             return this._error("Detected illegal (directional) languaged-tagged string with explicit datatype", token);
           }
-          literal2 = this._factory.literal(this._literalValue, datatype);
+          literal3 = this._factory.literal(this._literalValue, datatype);
           token = null;
           break;
         case "langcode":
           if (token.value.split("-").some((t) => t.length > 8))
             return this._error("Detected language tag with subtag longer than 8 characters", token);
-          literal2 = this._factory.literal(this._literalValue, token.value);
+          literal3 = this._factory.literal(this._literalValue, token.value);
           this._literalLanguage = token.value;
           token = null;
           readCb = this._readDirCode.bind(this, component);
           break;
       }
-      return { token, literal: literal2, readCb };
+      return { token, literal: literal3, readCb };
     }
     _readDirCode(component, listItem, token) {
       if (token.type === "dircode") {
@@ -4772,18 +4824,18 @@
       return !prefixMatch ? `<${iri}>` : !prefixMatch[1] ? iri : this._prefixIRIs[prefixMatch[1]] + prefixMatch[2];
     }
     // ### `_encodeLiteral` represents a literal
-    _encodeLiteral(literal2) {
-      let value = literal2.value;
+    _encodeLiteral(literal3) {
+      let value = literal3.value;
       if (escape.test(value))
         value = value.replace(escapeAll, characterReplacer);
-      const direction = literal2.direction ? `--${literal2.direction}` : "";
-      if (literal2.language)
-        return `"${value}"@${literal2.language}${direction}`;
+      const direction = literal3.direction ? `--${literal3.direction}` : "";
+      if (literal3.language)
+        return `"${value}"@${literal3.language}${direction}`;
       if (this._lineMode) {
-        if (literal2.datatype.value === xsd3.string)
+        if (literal3.datatype.value === xsd3.string)
           return `"${value}"`;
       } else {
-        switch (literal2.datatype.value) {
+        switch (literal3.datatype.value) {
           case xsd3.string:
             return `"${value}"`;
           case xsd3.boolean:
@@ -4804,7 +4856,7 @@
             break;
         }
       }
-      return `"${value}"^^${this._encodeIriOrBlank(literal2.datatype)}`;
+      return `"${value}"^^${this._encodeIriOrBlank(literal3.datatype)}`;
     }
     // ### `_encodePredicate` represents a predicate
     _encodePredicate(predicate) {
@@ -4971,41 +5023,37 @@
         prefixes: source.prefixDeclarations("source")
       });
       const xsd4 = source.prefixes.xsd;
-      const { quad: quad2, namedNode: namedNode2, literal: literal2, blankNode: blankNode2 } = N3DataFactory_default;
-      const writeClassNames = (id, subject) => {
+      const { quad: quad2, namedNode: namedNode2, literal: literal3, blankNode: blankNode2 } = N3DataFactory_default;
+      const blankNodes = /* @__PURE__ */ new Map();
+      const getClassPredicates = (subject) => {
+        const predicates = [];
         let classNames = subject.a;
         if (!classNames) {
-          return;
+          return predicates;
         }
         if (!Array.isArray(classNames)) {
           classNames = [classNames];
         }
-        if (classNames?.length) {
-          for (let name of classNames) {
-            name = source.fullURI(name);
-            writer.addQuad(quad2(
-              namedNode2(id),
-              namedNode2(rdfType),
-              namedNode2(name)
-            ));
-          }
+        for (const name of classNames) {
+          predicates.push({
+            predicate: namedNode2(rdfType),
+            object: namedNode2(source.fullURI(name))
+          });
         }
+        return predicates;
       };
-      const writeProperties = (id, subject) => {
+      const writeProperties = (subjectNode, subject) => {
         if (!subject) {
           return;
         }
         let preds = getPredicates(subject);
         for (let pred of preds) {
-          if (pred.predicate.id == "id" || pred.predicate.id == "a") {
-            continue;
-          }
           if (!Array.isArray(pred.object)) {
             pred.object = [pred.object];
           }
           for (let o of pred.object) {
             writer.addQuad(quad2(
-              namedNode2(id),
+              subjectNode,
               pred.predicate,
               o
             ));
@@ -5013,9 +5061,12 @@
         }
       };
       const getPredicates = (object) => {
-        let preds = [];
+        let preds = getClassPredicates(object);
         Object.entries(object).forEach((entry) => {
           const predicate = entry[0];
+          if (predicate == "id" || predicate == "a") {
+            return;
+          }
           let object2 = entry[1];
           const fullPred = source.fullURI(predicate);
           let pred = {
@@ -5039,26 +5090,24 @@
         return preds;
       };
       const getLiteral = (object) => {
+        const language = object?.language;
         let type = source.getType(object) || void 0;
-        if (type) {
+        if (language) {
+          type = language;
+        } else if (type) {
           if (type == xsd4 + source.context.separator + "string" || type == xsd4 + source.context.separator + "number") {
             type = void 0;
           } else {
             type = source.fullURI(type);
           }
           type = namedNode2(type);
-        } else {
-          let language = object?.language;
-          if (language) {
-            type = language;
-          }
         }
         if (object instanceof String) {
           object = "" + object;
         } else if (object instanceof Number) {
           object = +object;
         }
-        return literal2(object, type);
+        return literal3(object, type);
       };
       const isLiteral2 = (value) => {
         return value instanceof String || value instanceof Number || typeof value == "boolean" || typeof value == "string" || typeof value == "number";
@@ -5077,7 +5126,12 @@
         return writer.list(list);
       };
       const getBlankNode = (object) => {
-        return writer.blank(getPredicates(object));
+        if (!blankNodes.has(object)) {
+          const node = blankNode2();
+          blankNodes.set(object, node);
+          writeProperties(node, object);
+        }
+        return blankNodes.get(object);
       };
       const getArray = (object) => {
         let list = [];
@@ -5096,8 +5150,7 @@
       };
       Object.entries(source.subjects).forEach(([id, subject]) => {
         id = source.shortURI(id, ":");
-        writeClassNames(id, subject);
-        writeProperties(id, subject);
+        writeProperties(namedNode2(id), subject);
       });
       writer.end((error, result) => {
         if (result) {
@@ -5168,15 +5221,30 @@
     const anonymousDeletes = [];
     const anonymousInserts = [];
     const where = [];
+    const originalTerms = /* @__PURE__ */ new Map();
+    const replacementTerms = /* @__PURE__ */ new Map();
     for (const unit of deletedUnits) {
       assertOwnedAnonymousUnit(unit, "delete");
-      const variableQuads = mapBlankNodes(unit.quads, (name) => factory.variable(name), factory.quad, "old");
+      const variableQuads = mapBlankNodes(
+        unit.quads,
+        (name) => factory.variable(name),
+        factory.quad,
+        "old",
+        originalTerms
+      );
       where.push(...variableQuads);
       anonymousDeletes.push(...variableQuads);
     }
     for (const unit of insertedUnits) {
       assertOwnedAnonymousUnit(unit, "insert");
-      anonymousInserts.push(...mapBlankNodes(unit.quads, (name) => factory.blankNode(name), factory.quad, "insert"));
+      const insertedQuads = mapBlankNodes(
+        unit.quads,
+        (name) => factory.blankNode(name),
+        factory.quad,
+        "insert",
+        replacementTerms
+      );
+      anonymousInserts.push(...insertedQuads);
     }
     const plainOriginal = original.filter((quad2) => !originalAnonymous.quadKeys.has(quadKey(quad2)));
     const plainCurrent = current.filter((quad2) => !currentAnonymous.quadKeys.has(quadKey(quad2)));
@@ -5330,8 +5398,7 @@
       }
     }
   }
-  function mapBlankNodes(quads, createTerm, createQuad, prefix) {
-    const terms = /* @__PURE__ */ new Map();
+  function mapBlankNodes(quads, createTerm, createQuad, prefix, terms) {
     const mapTerm = (term) => {
       if (!isBlankNode(term)) {
         return term;

@@ -1,5 +1,5 @@
 import tap from 'tap'
-import oldm, {Collection, many, one} from '@muze-nl/oldm-core'
+import oldm, {Collection, literal, many, one} from '@muze-nl/oldm-core'
 import {n3Parser, n3PatchWriter, n3Writer} from '@muze-nl/oldm-n3'
 
 const url = 'https://example.org/profile/card#me'
@@ -102,7 +102,7 @@ tap.test('n3Writer serializes changed data that can be parsed back', async t => 
 	vcard:fn "Ben".
 `)
 
-	source.primary.vcard$fn = source.setLanguage('Auke Cornelis van Slooten', 'nl')
+	source.primary.vcard$fn = literal('Auke Cornelis van Slooten', {language: 'nl'})
 	source.primary.vcard$nickname = ['Poef', 'Auke']
 
 	const output = await source.write()

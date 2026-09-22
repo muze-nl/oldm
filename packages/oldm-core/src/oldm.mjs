@@ -32,6 +32,30 @@ export const prefixes = {
 	xsd:    'http://www.w3.org/2001/XMLSchema#'
 }
 
+export function literal(value, options={})
+{
+	let result
+	if (typeof value == 'string' || value instanceof String) {
+		result = new String(value)
+	}
+	else if (typeof value == 'number' || value instanceof Number) {
+		result = new Number(value)
+	}
+	else {
+		throw new TypeError('literal expects a string or number')
+	}
+
+	const type = options.type ?? value?.type
+	const language = options.language ?? value?.language
+	if (type !== undefined) {
+		result.type = type
+	}
+	if (language !== undefined) {
+		result.language = language
+	}
+	return result
+}
+
 export function one(values, whichOne='last')
 {
 	let result = values
@@ -964,18 +988,16 @@ export class Graph
 		return this.context.getType(literal)
 	}
 
-	setLanguage(literal, language)
+	setLanguage(value, language)
 	{
-		if (typeof literal == 'string') {
-			literal = new String(literal)
-		} else if (typeof literal == 'number') {
-			literal = new Number(literal)
+		if (typeof value == 'string' || typeof value == 'number') {
+			value = literal(value)
 		}
-		if (typeof literal !== 'object') {
-			throw new Error('cannot set language on ',literal)
+		if (typeof value !== 'object') {
+			throw new Error('cannot set language on ',value)
 		}
-		literal.language = language
-		return literal
+		value.language = language
+		return value
 	}
 
 	getValue(object)
@@ -989,7 +1011,7 @@ export class Graph
 			}
 			let language = object.language
 			if (language) {
-				result = this.setLanguage(result, language)
+				result = literal(result, {language})
 			}
 		} else if (object.termType=='BlankNode') {
 			result = this.addBlankNode(object.id)

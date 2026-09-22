@@ -16,6 +16,34 @@ const context = oldm({
 ```
 
 
+## Literal values
+
+Create literals without a graph or parser:
+
+```javascript
+import { literal } from '@muze-nl/oldm-core'
+
+const name = literal('Auke', { language: 'nl-NL' })
+const plainName = literal('Auke', { language: '' })
+const birthday = literal('1972-09-20', { type: 'xsd$date' })
+const text = literal('https://example.org/')
+```
+
+`literal(value, options)` accepts strings and numbers, including boxed values.
+It returns a fresh boxed value with optional `.language` and `.type` metadata.
+Existing metadata is copied unless overridden; the input is not modified.
+An explicit empty language is retained as `language: ''`. Datatype names are
+stored as supplied and resolved using the destination graph's prefixes when
+writing; full datatype IRIs can also be supplied.
+
+Pass these values to `graph.set()` or `context.set()` like other OLDM values.
+Boxing keeps URL-shaped text a literal instead of letting it become a named node.
+Use `String(value)` or `Number(value)` to obtain its primitive value.
+
+`graph.setLanguage(value, language)` remains available for compatibility,
+including its existing behavior of modifying an already boxed value in place.
+Prefer `literal()` for new code. Deletion matching is unchanged by this helper.
+
 ## Prefix preference
 
 OLDM shortens predicate and type IRIs with the prefixes configured on the context. Prefix declarations found in Turtle input are parser conveniences; they do not decide the JavaScript property names exposed by OLDM.
@@ -112,6 +140,7 @@ Patch writers can support owned anonymous values conservatively: fresh blank nod
 - `NamedNode`
 - `BlankNode`
 - `Collection`
+- `literal(value, options)`
 - `one(values, whichOne)`
 - `many(values)`
 - `first(...values)`
