@@ -19,7 +19,7 @@ tap.test('friendly package exports one default object and installs globalThis.ol
 })
 
 tap.test('oldm.literal values round-trip through the default writer', async t => {
-	const source = oldm.context().parse('@prefix : <#>.', url, 'text/turtle')
+	const source = oldm.context().parse('', url, 'text/turtle')
 	source.set(url, 'vcard$fn', oldm.literal('Auke', {language: 'nl'}))
 	source.set(url, 'vcard$bday', oldm.literal('1972-09-20', {type: 'xsd$date'}))
 	source.set(url, 'schema$text', oldm.literal('https://example.org/'))

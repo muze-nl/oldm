@@ -68,6 +68,31 @@ tap.test('n3Parser preserves xsd datatypes, language tags and collections', t =>
 	t.end()
 })
 
+tap.test('n3Writer writes a fragment subject relative to the resource URL', async t => {
+	const source = parse('<#me> <https://schema.org/name> "Auke".')
+	const output = await source.write()
+	const roundtripped = parse(output)
+
+	t.match(output, /<#me> schema:name "Auke"\./)
+	t.same(Object.keys(roundtripped.subjects), [url])
+	t.equal(String(roundtripped.get(url)?.schema$name), 'Auke')
+	t.end()
+})
+
+tap.test('n3Writer uses an empty prefix for a fragment subject when declared', async t => {
+	const source = parse(`
+@prefix : <#>.
+:me <https://schema.org/name> "Auke".
+`)
+	const output = await source.write()
+	const roundtripped = parse(output)
+
+	t.match(output, /^:me schema:name "Auke"\./m)
+	t.same(Object.keys(roundtripped.subjects), [url])
+	t.equal(String(roundtripped.get(url)?.schema$name), 'Auke')
+	t.end()
+})
+
 tap.test('n3Writer preserves an unchanged language-tagged literal', async t => {
 	const source = parse(`
 @prefix : <#>.

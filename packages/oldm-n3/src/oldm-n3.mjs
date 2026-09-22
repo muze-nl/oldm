@@ -27,9 +27,14 @@ export const n3Parser = (input, uri, type) => {
  */
 export const n3Writer = (source) => {
 	return new Promise((resolve, reject) => {
+		const resourceUrl = source.url.split('#')[0]
+		const prefixes = source.prefixDeclarations('source')
+		const hasResourcePrefix = Object.values(prefixes).includes(`${resourceUrl}#`)
 		const writer = new Writer({
 			format: source.mimetype,
-			prefixes: source.prefixDeclarations('source')
+			prefixes,
+			// N3 makes IRIs relative before matching prefixes; preserve declared resource prefixes.
+			baseIRI: hasResourcePrefix ? undefined : resourceUrl
 		})
 		const xsd = source.prefixes.xsd
 		const {quad, namedNode, literal, blankNode} = DataFactory
@@ -182,7 +187,6 @@ export const n3Writer = (source) => {
 		}
 
 		Object.entries(source.subjects).forEach(([id,subject]) => {
-			id = source.shortURI(id, ':')
 			writeProperties(namedNode(id), subject)
 		})
 

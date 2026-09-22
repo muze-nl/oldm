@@ -5017,9 +5017,14 @@ var n3Parser = (input, uri, type) => {
 };
 var n3Writer = (source) => {
   return new Promise((resolve, reject) => {
+    const resourceUrl = source.url.split("#")[0];
+    const prefixes2 = source.prefixDeclarations("source");
+    const hasResourcePrefix = Object.values(prefixes2).includes(`${resourceUrl}#`);
     const writer = new N3Writer({
       format: source.mimetype,
-      prefixes: source.prefixDeclarations("source")
+      prefixes: prefixes2,
+      // N3 makes IRIs relative before matching prefixes; preserve declared resource prefixes.
+      baseIRI: hasResourcePrefix ? void 0 : resourceUrl
     });
     const xsd4 = source.prefixes.xsd;
     const { quad: quad2, namedNode: namedNode2, literal: literal3, blankNode: blankNode2 } = N3DataFactory_default;
@@ -5148,7 +5153,6 @@ var n3Writer = (source) => {
       return list;
     };
     Object.entries(source.subjects).forEach(([id, subject]) => {
-      id = source.shortURI(id, ":");
       writeProperties(namedNode2(id), subject);
     });
     writer.end((error, result) => {
