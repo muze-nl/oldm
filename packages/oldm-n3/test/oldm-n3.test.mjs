@@ -68,6 +68,20 @@ tap.test('n3Parser preserves xsd datatypes, language tags and collections', t =>
 	t.end()
 })
 
+tap.test('n3Writer preserves an unchanged language-tagged literal', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+:me vcard:fn "Hallo"@nl.
+`)
+	const output = await source.write()
+	const roundtripped = parse(output)
+
+	t.equal(String(roundtripped.primary.vcard$fn), 'Hallo')
+	t.equal(roundtripped.primary.vcard$fn.language, 'nl')
+	t.end()
+})
+
 tap.test('n3Writer serializes changed data that can be parsed back', async t => {
 	const source = parse(`
 @prefix : <#>.

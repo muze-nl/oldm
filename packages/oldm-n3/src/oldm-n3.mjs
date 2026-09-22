@@ -106,8 +106,13 @@ export const n3Writer = (source) => {
 		}
 
 		const getLiteral = (object) => {
+			const language = object?.language
 			let type = source.getType(object) || undefined
-			if (type) {
+			if (language) {
+				// N3 treats a string second argument as a language tag.
+				type = language
+			}
+			else if (type) {
 				if (type == xsd+source.context.separator+'string' 
 					|| type == xsd+source.context.separator+'number') {
 					type = undefined
@@ -115,11 +120,6 @@ export const n3Writer = (source) => {
 					type = source.fullURI(type)
 				}
 				type = namedNode(type)
-			} else {
-				let language = object?.language
-				if (language) {
-					type = language // is automatically detected as language by literal()
-				}
 			}
 			if (object instanceof String) {
 				object = ''+object
