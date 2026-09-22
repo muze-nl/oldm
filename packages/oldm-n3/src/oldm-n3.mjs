@@ -22,9 +22,8 @@ export const n3Parser = (input, uri, type) => {
  * and writes quads using n3.Writer
  * NamedNode objects are also in the subjects list, so
  * only need their object.id in a quad
- * BlankNodes use writer.blank, lists (collection) writer.list
- * blank expects an array of [predicate, object] pairs
- * so only write object blanks, lists and literals, use object.id for the rest
+ * BlankNodes reuse one RDF identifier per object and write their properties once.
+ * Collections use writer.list; named-node references use object.id.
  */
 export const n3Writer = (source) => {
 	return new Promise((resolve, reject) => {
@@ -34,6 +33,7 @@ export const n3Writer = (source) => {
 		})
 		const xsd = source.prefixes.xsd
 		const {quad, namedNode, literal, blankNode} = DataFactory
+		const blankNodes = new Map()
 
 		const getClassPredicates = (subject) => {
 			const predicates = []
@@ -53,7 +53,7 @@ export const n3Writer = (source) => {
 			return predicates
 		}
 
-		const writeProperties = (id, subject) => {
+		const writeProperties = (subjectNode, subject) => {
 			if (!subject) {
 				return
 			}
@@ -64,7 +64,7 @@ export const n3Writer = (source) => {
 				}
 				for (let o of pred.object ) {
 					writer.addQuad(quad(
-						namedNode(id),
+						subjectNode,
 						pred.predicate,
 						o
 					))
@@ -152,7 +152,12 @@ export const n3Writer = (source) => {
 
 
 		const getBlankNode = (object) => {
-			return writer.blank(getPredicates(object))
+			if (!blankNodes.has(object)) {
+				const node = blankNode()
+				blankNodes.set(object, node)
+				writeProperties(node, object)
+			}
+			return blankNodes.get(object)
 		}
 
 		const getArray = (object) => {
@@ -178,7 +183,7 @@ export const n3Writer = (source) => {
 
 		Object.entries(source.subjects).forEach(([id,subject]) => {
 			id = source.shortURI(id, ':')
-			writeProperties(id, subject)			
+			writeProperties(namedNode(id), subject)
 		})
 
 		writer.end((error, result) => {

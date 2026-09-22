@@ -184,6 +184,39 @@ tap.test('n3Writer preserves the type of a blank node', async t => {
 	t.end()
 })
 
+tap.test('n3Writer preserves shared blank-node identity', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <https://schema.org/>.
+:me schema:homeLocation _:place;
+	schema:workLocation _:place.
+_:place schema:name "Amsterdam".
+`)
+	t.equal(source.primary.schema$homeLocation, source.primary.schema$workLocation)
+	const roundtripped = parse(await source.write())
+	const person = roundtripped.primary
+
+	t.equal(person.schema$homeLocation, person.schema$workLocation)
+	t.equal(String(person.schema$homeLocation.schema$name), 'Amsterdam')
+	t.end()
+})
+
+tap.test('n3Writer preserves a blank node referring to itself', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <https://schema.org/>.
+:me schema:homeLocation _:place.
+_:place schema:name "Amsterdam";
+	schema:containedInPlace _:place.
+`)
+	const roundtripped = parse(await source.write())
+	const place = roundtripped.primary.schema$homeLocation
+
+	t.equal(place.schema$containedInPlace, place)
+	t.equal(String(place.schema$name), 'Amsterdam')
+	t.end()
+})
+
 tap.test('n3PatchWriter serializes simple named-node changes as a Solid N3 Patch', async t => {
 	const source = parse(`
 @prefix : <#>.
