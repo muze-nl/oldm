@@ -1,3 +1,4 @@
+import {absoluteIRI, turtlePrefixedIRI} from '@muze-nl/oldm-core/iri'
 import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 import { Parser, Writer, DataFactory } from 'n3'
 
@@ -17,6 +18,22 @@ export const n3Parser = (input, uri, type) => {
     return { quads, prefixes }
 }
 
+// N3's default encoder relativizes before checking prefixes. Override its term
+// encoder so prefix selection and exact relative round trips match the small writer.
+class ResourceWriter extends Writer {
+	constructor(source, options) {
+		super(options)
+		this.source = source
+		this.entries = Object.entries(options.prefixes)
+	}
+
+	_encodeIriOrBlank(term) {
+		if (term.termType != 'NamedNode' || this._lineMode) return super._encodeIriOrBlank(term)
+		const iri = absoluteIRI(term.value)
+		return turtlePrefixedIRI(iri, this.entries) ?? `<${this.source.relativeURI(iri)}>`
+	}
+}
+
 /**
  * Loops over all subjects in a source
  * and writes quads using n3.Writer
@@ -27,15 +44,9 @@ export const n3Parser = (input, uri, type) => {
  */
 export const n3Writer = (source) => {
 	return new Promise((resolve, reject) => {
-		const resourceUrl = source.url.split('#')[0]
 		const prefixes = source.prefixDeclarations('source')
-		const hasResourcePrefix = Object.values(prefixes).includes(`${resourceUrl}#`)
-		const writer = new Writer({
-			format: source.mimetype,
-			prefixes,
-			// N3 makes IRIs relative before matching prefixes; preserve declared resource prefixes.
-			baseIRI: hasResourcePrefix ? undefined : resourceUrl
-		})
+		const writer = new ResourceWriter(source, {format: source.mimetype, prefixes})
+
 		const xsd = source.prefixes.xsd
 		const {quad, namedNode, literal, blankNode} = DataFactory
 		const blankNodes = new Map()
@@ -192,7 +203,7 @@ export const n3Writer = (source) => {
 
 		writer.end((error, result) => {
 			if (result) {
-				resolve(result)
+				resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .\n`+result)
 			} else {
 				reject(error)
 			}

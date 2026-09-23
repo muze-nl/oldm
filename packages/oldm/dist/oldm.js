@@ -109,23 +109,23 @@ var require_base64_js = __commonJS({
       var tmp;
       var len2 = uint8.length;
       var extraBytes = len2 % 3;
-      var parts = [];
+      var parts2 = [];
       var maxChunkLength = 16383;
       for (var i2 = 0, len22 = len2 - extraBytes; i2 < len22; i2 += maxChunkLength) {
-        parts.push(encodeChunk(uint8, i2, i2 + maxChunkLength > len22 ? len22 : i2 + maxChunkLength));
+        parts2.push(encodeChunk(uint8, i2, i2 + maxChunkLength > len22 ? len22 : i2 + maxChunkLength));
       }
       if (extraBytes === 1) {
         tmp = uint8[len2 - 1];
-        parts.push(
+        parts2.push(
           lookup[tmp >> 2] + lookup[tmp << 4 & 63] + "=="
         );
       } else if (extraBytes === 2) {
         tmp = (uint8[len2 - 2] << 8) + uint8[len2 - 1];
-        parts.push(
+        parts2.push(
           lookup[tmp >> 10] + lookup[tmp >> 4 & 63] + lookup[tmp << 2 & 63] + "="
         );
       }
-      return parts.join("");
+      return parts2.join("");
     }
   }
 });
@@ -1925,6 +1925,218 @@ __export(oldm_exports, {
   prefixes: () => prefixes,
   rdfType: () => rdfType
 });
+
+// ../oldm-core/src/iri.mjs
+var ucschar = "\\u00A0-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFEF\\u{10000}-\\u{1FFFD}\\u{20000}-\\u{2FFFD}\\u{30000}-\\u{3FFFD}\\u{40000}-\\u{4FFFD}\\u{50000}-\\u{5FFFD}\\u{60000}-\\u{6FFFD}\\u{70000}-\\u{7FFFD}\\u{80000}-\\u{8FFFD}\\u{90000}-\\u{9FFFD}\\u{A0000}-\\u{AFFFD}\\u{B0000}-\\u{BFFFD}\\u{C0000}-\\u{CFFFD}\\u{D0000}-\\u{DFFFD}\\u{E1000}-\\u{EFFFD}";
+var iprivate = "\\uE000-\\uF8FF\\u{F0000}-\\u{FFFFD}\\u{100000}-\\u{10FFFD}";
+var nameChars = `a-zA-Z0-9._~!$&'()*+,;=\\-${ucschar}`;
+var component = (extra) => new RegExp(`^(?:[${nameChars}${extra}]|%[0-9a-fA-F]{2})*$`, "u");
+var pathPattern = component(":@/");
+var queryPattern = component(":@/?" + iprivate);
+var fragmentPattern = component(":@/?");
+var userPattern = component(":");
+var hostPattern = component("");
+function parts(value, requireAbsolute = false) {
+  if (typeof value != "string")
+    throw new TypeError("Expected an IRI string");
+  if (/[\u0000-\u0020\u007F-\u009F]/.test(value))
+    throw new TypeError(`Invalid IRI: ${value}`);
+  const match = /^(?:([a-z][a-z0-9+.-]*):)?(?:\/\/([^/?#]*))?([^?#]*)(\?[^#]*)?(#.*)?$/is.exec(value);
+  if (!match)
+    throw new TypeError(`Invalid IRI: ${value}`);
+  const [, scheme, authority, path, query, fragment] = match;
+  if (requireAbsolute && !scheme)
+    throw new TypeError(`Expected an absolute IRI: ${value}`);
+  if (!pathPattern.test(path) || query && !queryPattern.test(query.slice(1)) || fragment && !fragmentPattern.test(fragment.slice(1)) || !scheme && authority === void 0 && path.split("/")[0].includes(":")) {
+    throw new TypeError(`Invalid IRI: ${value}`);
+  }
+  if (authority !== void 0) {
+    const host = authority.slice(authority.lastIndexOf("@") + 1);
+    const user = authority.includes("@") ? authority.slice(0, authority.lastIndexOf("@")) : "";
+    const match2 = /^(\[[^\]]+\]|[^:]*)(?::([0-9]*))?$/.exec(host);
+    if (!userPattern.test(user) || !match2)
+      throw new TypeError(`Invalid IRI authority: ${value}`);
+    if (match2[1].startsWith("[")) {
+      if (!/^\[v[0-9a-f]+\.[a-z0-9._~!$&'()*+,;=:\-]+\]$/i.test(match2[1])) {
+        try {
+          new URL(`http://${match2[1]}/`);
+        } catch {
+          throw new TypeError(`Invalid IP literal: ${value}`);
+        }
+      }
+    } else if (!hostPattern.test(match2[1]))
+      throw new TypeError(`Invalid IRI host: ${value}`);
+    if (/^https?$/i.test(scheme) && !match2[1])
+      throw new TypeError(`Missing HTTP host: ${value}`);
+  } else if (/^https?$/i.test(scheme))
+    throw new TypeError(`Missing HTTP authority: ${value}`);
+  return { scheme, authority, path, query, fragment };
+}
+var validatedIRIs = /* @__PURE__ */ new Set();
+function absoluteIRI(value) {
+  if (!validatedIRIs.has(value)) {
+    parts(value, true);
+    if (validatedIRIs.size >= 1024)
+      validatedIRIs.delete(validatedIRIs.values().next().value);
+    validatedIRIs.add(value);
+  }
+  return value;
+}
+function join({ scheme, authority, path, query, fragment }) {
+  return (scheme ? scheme + ":" : "") + (authority === void 0 ? "" : "//" + authority) + path + (query ?? "") + (fragment ?? "");
+}
+function removeDotSegments(path) {
+  let output = "";
+  while (path) {
+    if (path.startsWith("../"))
+      path = path.slice(3);
+    else if (path.startsWith("./"))
+      path = path.slice(2);
+    else if (path.startsWith("/./") || path == "/.")
+      path = "/" + path.slice(3);
+    else if (path.startsWith("/../") || path == "/..") {
+      path = "/" + path.slice(4);
+      output = output.slice(0, Math.max(0, output.lastIndexOf("/")));
+    } else if (path == "." || path == "..")
+      path = "";
+    else {
+      const end = path.indexOf("/", path.startsWith("/") ? 1 : 0);
+      if (end < 0) {
+        output += path;
+        path = "";
+      } else {
+        output += path.slice(0, end);
+        path = path.slice(end);
+      }
+    }
+  }
+  return output;
+}
+function resolveIRIReference(value, base) {
+  if (typeof value == "string" && /^[a-z][a-z0-9+.-]*:/i.test(value))
+    return absoluteIRI(value);
+  const ref = parts(value);
+  if (base == null)
+    throw new TypeError(`Cannot resolve a relative IRI without a base: ${value}`);
+  const target = parts(base, true);
+  if (ref.authority !== void 0) {
+    target.authority = ref.authority;
+    target.path = removeDotSegments(ref.path);
+    target.query = ref.query;
+  } else if (!ref.path) {
+    target.query = ref.query ?? target.query;
+  } else {
+    if (!ref.path.startsWith("/") && target.authority === void 0 && !target.path.startsWith("/")) {
+      throw new TypeError(`Base IRI does not support relative paths: ${base}`);
+    }
+    const directory = target.authority !== void 0 && !target.path ? "/" : target.path.slice(0, target.path.lastIndexOf("/") + 1);
+    target.path = removeDotSegments(ref.path.startsWith("/") ? ref.path : directory + ref.path);
+    target.query = ref.query;
+  }
+  target.fragment = ref.fragment;
+  return absoluteIRI(join(target));
+}
+function expandIRI(value, namespaceFor, separator, base) {
+  value = value?.id ?? value;
+  if (typeof value != "string")
+    throw new TypeError("Expected an IRI string");
+  const index = value.indexOf(separator);
+  if (index >= 0) {
+    const prefix = value.slice(0, index);
+    const namespace = namespaceFor(prefix);
+    if (namespace !== void 0)
+      return absoluteIRI(absoluteIRI(namespace) + value.slice(index + separator.length));
+    if (separator != ":" && !/[:/?#]/.test(prefix))
+      throw new TypeError(`Unknown prefix: ${prefix}`);
+  }
+  return resolveIRIReference(value, base);
+}
+function shortenIRI(value, entries, separator, canonicalize = (value2) => value2) {
+  value = canonicalize(value);
+  for (const [prefix, iri] of entries) {
+    const namespace = canonicalize(iri);
+    if (value.startsWith(namespace)) {
+      absoluteIRI(iri);
+      return prefix + separator + value.slice(namespace.length);
+    }
+  }
+  return value;
+}
+function relativeIRI(value, base, separator = "$") {
+  const target = parts(value, true);
+  if (base == null)
+    return value;
+  const origin = parts(base, true);
+  if (target.scheme !== origin.scheme || target.authority !== origin.authority)
+    return value;
+  const suffix = (target.query ?? "") + (target.fragment ?? "");
+  const candidates = [];
+  if (target.path == origin.path) {
+    if (target.query == origin.query)
+      candidates.push(target.fragment ?? "");
+    if (target.query !== void 0)
+      candidates.push(suffix);
+  }
+  if (origin.authority !== void 0 || origin.path.startsWith("/")) {
+    const directory = origin.authority !== void 0 && !origin.path ? "/" : origin.path.slice(0, origin.path.lastIndexOf("/") + 1);
+    const from = directory.split("/").slice(0, -1);
+    const to = target.path.split("/");
+    let common = 0;
+    while (common < from.length && common < to.length - 1 && from[common] == to[common])
+      common++;
+    let path = "../".repeat(from.length - common) + to.slice(common).join("/");
+    if (!path || path.startsWith("/") || path.split("/")[0].includes(":") || path.split("/")[0].includes(separator))
+      path = "./" + path;
+    candidates.push(path + suffix);
+    if (target.path.startsWith("/") && !target.path.startsWith("//"))
+      candidates.push(target.path + suffix);
+  }
+  return candidates.filter((candidate) => {
+    try {
+      return resolveIRIReference(candidate, base) === value;
+    } catch {
+      return false;
+    }
+  }).sort((a, b) => a.length - b.length)[0] ?? value;
+}
+var pnBase = "A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD\\u{10000}-\\u{EFFFF}";
+var pnChars = pnBase + "0-9_\\-\\u00B7\\u0300-\\u036F\\u203F-\\u2040";
+var prefixPattern = new RegExp(`^(?:[${pnBase}](?:[${pnChars}.]*[${pnChars}])?)?$`, "u");
+var firstLocal = new RegExp(`^[${pnBase}_:0-9]$`, "u");
+var restLocal = new RegExp(`^[${pnChars}:]$`, "u");
+function turtlePrefixedIRI(value, entries) {
+  for (const [prefix, namespace] of entries) {
+    if (!prefixPattern.test(prefix) || !value.startsWith(namespace))
+      continue;
+    const local = Array.from(value.slice(namespace.length));
+    let escaped = "";
+    let valid = true;
+    for (let i = 0; i < local.length; i++) {
+      const char = local[i];
+      if (char == "%" && /^[0-9a-f]{2}$/i.test(local.slice(i + 1, i + 3).join(""))) {
+        escaped += local.slice(i, i + 3).join("");
+        i += 2;
+      } else if ((i ? restLocal : firstLocal).test(char) || char == "." && i && i < local.length - 1)
+        escaped += char;
+      else if ("_~.-!$&'()*+,;=/?#@%".includes(char))
+        escaped += "\\" + char;
+      else {
+        valid = false;
+        break;
+      }
+    }
+    if (valid)
+      return prefix + ":" + escaped;
+  }
+  return null;
+}
+
+// ../oldm-core/src/oldm.mjs
+function* orderedPrefixes(context) {
+  for (const prefix of context.prefixOrder) {
+    yield [prefix, context.prefixes[prefix]];
+  }
+}
 function oldm(options) {
   return new Context(options);
 }
@@ -1966,7 +2178,7 @@ function literal(value, options = {}) {
   const type = options.type ?? value?.type;
   const language = options.language ?? value?.language;
   if (type !== void 0) {
-    result.type = type;
+    result.type = absoluteIRI(type);
   }
   if (language !== void 0) {
     result.language = language;
@@ -2125,6 +2337,7 @@ var Context = class {
     this.graphsByUrl = /* @__PURE__ */ Object.create(null);
     this.defaultGraph = options?.defaultGraph ?? null;
     this.separator = options?.separator ?? "$";
+    this.baseURI = options?.baseURI;
     this.aliases = { ...aliases, ...options?.aliases ?? {} };
     Object.defineProperty(this, "subjects", {
       get() {
@@ -2142,14 +2355,7 @@ var Context = class {
     if (prefixes2) {
       for (let prefix in prefixes2) {
         let prefixURL = prefixes2[prefix];
-        if (prefixURL.match(/^http(s?):\/\/$/i)) {
-          prefixURL += url.substring(prefixURL.length);
-        } else
-          try {
-            prefixURL = new URL(prefixes2[prefix], url).href;
-          } catch (err) {
-            console.error("Could not parse prefix", prefixes2[prefix], err.message);
-          }
+        prefixURL = resolveIRIReference(prefixURL, url);
         if (!this.prefixes[prefix]) {
           this.prefixes[prefix] = prefixURL;
           this.prefixOrder.push(prefix);
@@ -2275,7 +2481,7 @@ var Context = class {
     if (!predicate) {
       return true;
     }
-    const property = subject.graph instanceof Graph ? subject.graph.propertyName(this.fullURI(predicate), "context") : this.propertyName(predicate);
+    const property = subject.graph instanceof Graph ? subject.graph.propertyName(predicate == "a" ? rdfType : this.fullURI(predicate), "context") : this.propertyName(predicate);
     if (!(property in subject)) {
       return false;
     }
@@ -2284,12 +2490,7 @@ var Context = class {
     }
     if (property == "a" && subject.graph instanceof Graph) {
       const graph = subject.graph;
-      const requested = graph.fullURI(value?.id ?? value, null, "context");
-      const classURI = this.canonicalURI(requested);
-      return values(subject[property]).some((item) => {
-        const sourceURI = graph.fullURI(item, null, "source");
-        return this.canonicalURI(sourceURI) == classURI;
-      });
+      value = graph.fullURI(value?.id ?? value, null, "context");
     }
     return values(subject[property]).some((item) => sameSourceValue(item, value));
   }
@@ -2306,10 +2507,11 @@ var Context = class {
     if (predicate?.id) {
       predicate = predicate.id;
     }
-    if (predicate == "a" || predicate == rdfType || this.fullURI(predicate) == rdfType) {
+    const fullPredicate = predicate == "a" ? rdfType : this.fullURI(predicate);
+    if (fullPredicate == rdfType) {
       return "a";
     }
-    return this.shortURI(this.fullURI(predicate));
+    return shortenIRI(fullPredicate, orderedPrefixes(this), this.separator, (iri) => this.canonicalURI(iri));
   }
   get(shortID) {
     return this.subjects[this.fullURI(shortID)];
@@ -2340,17 +2542,7 @@ var Context = class {
       if (predicate == "id") {
         continue;
       }
-      if (predicate == "a") {
-        const classes = values(value).map((item) => {
-          const classURI = source.graph.fullURI(item, null, "source");
-          return this.shortURI(classURI);
-        });
-        target.a = mergeValue(target.a, classes);
-        continue;
-      }
-      const contextPredicate = this.propertyName(
-        source.graph.fullURI(predicate, null, "source")
-      );
+      const contextPredicate = predicate == "a" ? "a" : this.propertyName(source.graph.fullURI(predicate, null, "source"));
       target[contextPredicate] = mergeValue(
         target[contextPredicate],
         resolveValue(value, subjects, this)
@@ -2386,28 +2578,14 @@ var Context = class {
       delete target[property];
     }
   }
-  fullURI(shortURI, separator = null) {
-    if (!separator) {
-      separator = this.separator;
-    }
-    const [prefix, path] = shortURI.split(separator);
-    if (path && this.prefixes[prefix]) {
-      return this.prefixes[prefix] + path;
-    }
-    return shortURI;
+  fullURI(value, separator = null) {
+    return expandIRI(value, (prefix) => Object.hasOwn(this.prefixes, prefix) ? this.prefixes[prefix] : void 0, separator ?? this.separator, this.baseURI);
   }
-  shortURI(fullURI, separator = null) {
-    if (!separator) {
-      separator = this.separator;
-    }
-    fullURI = this.canonicalURI(fullURI);
-    for (const prefix of this.prefixOrder) {
-      const iri = this.canonicalURI(this.prefixes[prefix]);
-      if (fullURI.startsWith(iri)) {
-        return prefix + separator + fullURI.substring(iri.length);
-      }
-    }
-    return fullURI;
+  shortURI(iri, separator = null) {
+    return shortenIRI(absoluteIRI(iri), orderedPrefixes(this), separator ?? this.separator);
+  }
+  relativeURI(iri, base = this.baseURI) {
+    return relativeIRI(iri, base, this.separator);
   }
   canonicalURI(uri) {
     uri = String(uri);
@@ -2430,7 +2608,7 @@ var Context = class {
     if (typeof literal3 !== "object") {
       throw new Error("cannot set type on ", literal3, shortType);
     }
-    literal3.type = shortType;
+    literal3.type = this.fullURI(shortType);
     return literal3;
   }
   getType(literal3) {
@@ -2445,6 +2623,7 @@ var Graph = class {
   constructor(quads, url, mimetype, prefixes2, context, originalSource = null) {
     this.mimetype = mimetype;
     this.url = url;
+    this.baseURI = url.split("#")[0];
     this.prefixes = prefixes2;
     this.context = context;
     this.originalSource = originalSource;
@@ -2503,7 +2682,7 @@ var Graph = class {
     }
   }
   addNamedNode(uri) {
-    let absURI = new URL(uri, this.url).href;
+    const absURI = this.fullURI(uri);
     if (!this.subjects[absURI]) {
       this.subjects[absURI] = new NamedNode(absURI, this);
     }
@@ -2578,11 +2757,11 @@ var Graph = class {
     if (predicate?.id) {
       predicate = predicate.id;
     }
-    const fullPredicate = this.fullURI(predicate, null, preference);
+    const fullPredicate = predicate == "a" ? rdfType : this.fullURI(predicate, null, preference);
     if (predicate == "a" || fullPredicate == rdfType) {
       return "a";
     }
-    return this.shortURI(fullPredicate, null, "source");
+    return shortenIRI(fullPredicate, this.prefixEntries("source"), this.context.separator, (iri) => this.context.canonicalURI(iri));
   }
   set(subject, predicate, value, options = {}) {
     const preference = options.prefixPreference ?? "source";
@@ -2683,6 +2862,12 @@ var Graph = class {
       }
       return value;
     }
+    if ((value instanceof String || value instanceof Number) && value.type !== void 0) {
+      const type = this.fullURI(value.type, null, preference);
+      if (type !== value.type) {
+        return literal(value, { type });
+      }
+    }
     if (this.looksLikeURI(value, preference)) {
       return this.addNamedNode(this.fullURI(value, null, preference));
     }
@@ -2695,10 +2880,7 @@ var Graph = class {
     return this.normalizeTypeValue(value, preference);
   }
   normalizeTypeValue(value, preference = "source") {
-    if (value instanceof NamedNode) {
-      return this.shortURI(value.id, null, "source");
-    }
-    return this.shortURI(this.fullURI(value, null, preference), null, "source");
+    return this.fullURI(value, null, preference);
   }
   looksLikeURI(value, preference = "source") {
     if (typeof value != "string") {
@@ -2707,45 +2889,24 @@ var Graph = class {
     if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
       return true;
     }
-    const [prefix, path] = value.split(this.context.separator);
-    return Boolean(path && this.prefixEntries(preference).some(([candidate]) => candidate == prefix));
+    const index = value.indexOf(this.context.separator);
+    return index >= 0 && this.prefixEntries(preference).some(([prefix]) => prefix == value.slice(0, index));
   }
-  fullURI(shortURI, separator = null, preference = "source") {
-    if (!separator) {
-      separator = this.context.separator;
-    }
-    const [prefix, path] = String(shortURI).split(separator);
-    if (path) {
-      for (const [candidate, iri] of this.prefixEntries(preference)) {
-        if (candidate == prefix) {
-          return iri + path;
-        }
-      }
-    }
-    return shortURI;
+  fullURI(value, separator = null, preference = "source") {
+    return expandIRI(value, (prefix) => this.prefixEntries(preference).find(([name]) => name == prefix)?.[1], separator ?? this.context.separator, this.baseURI);
   }
-  shortURI(fullURI, separator = null, preference = "source") {
-    if (!separator) {
-      separator = this.context.separator;
-    }
-    fullURI = this.context.canonicalURI(fullURI);
-    for (const [prefix, iri] of this.prefixEntries(preference)) {
-      const canonicalIRI = this.context.canonicalURI(iri);
-      if (fullURI.startsWith(canonicalIRI)) {
-        return prefix + separator + fullURI.substring(canonicalIRI.length);
-      }
-    }
-    if (this.url && fullURI.startsWith(this.url)) {
-      return fullURI.substring(this.url.length);
-    }
-    return fullURI;
+  shortURI(iri, separator = null, preference = "source") {
+    return shortenIRI(absoluteIRI(iri), this.prefixEntries(preference), separator ?? this.context.separator);
+  }
+  relativeURI(iri, base = this.baseURI) {
+    return relativeIRI(iri, base, this.context.separator);
   }
   /**
    * This sets the type of a literal, usually one of the xsd types
    */
   setType(literal3, type) {
-    const shortType = this.shortURI(type);
-    return this.context.setType(literal3, shortType);
+    const fullType = this.fullURI(type);
+    return this.context.setType(literal3, fullType);
   }
   /**
    * This returns the type of a literal, or null
@@ -2796,11 +2957,10 @@ var BlankNode = class {
       predicate = predicate.id;
     }
     if (predicate == rdfType) {
-      let type = this.graph.shortURI(object.id);
-      this.addType(type);
+      this.addType(object.id);
     } else {
       const value = this.graph.getValue(object);
-      predicate = this.graph.shortURI(predicate);
+      predicate = this.graph.propertyName(predicate);
       if (!this[predicate]) {
         this[predicate] = value;
       } else if (Array.isArray(this[predicate])) {
@@ -2816,6 +2976,7 @@ var BlankNode = class {
    * The type value can be any URI, xsdTypes are unexpected here
    */
   addType(type) {
+    type = this.graph.fullURI(type);
     if (!this.a) {
       this.a = type;
     } else {
@@ -4061,7 +4222,7 @@ var N3Parser = class _N3Parser {
     return this._completeObjectLiteral(token, true);
   }
   // ### `_completeLiteral` completes a literal with an optional datatype or language
-  _completeLiteral(token, component) {
+  _completeLiteral(token, component2) {
     let literal3 = this._factory.literal(this._literalValue);
     let readCb;
     switch (token.type) {
@@ -4082,22 +4243,22 @@ var N3Parser = class _N3Parser {
         literal3 = this._factory.literal(this._literalValue, token.value);
         this._literalLanguage = token.value;
         token = null;
-        readCb = this._readDirCode.bind(this, component);
+        readCb = this._readDirCode.bind(this, component2);
         break;
     }
     return { token, literal: literal3, readCb };
   }
-  _readDirCode(component, listItem, token) {
+  _readDirCode(component2, listItem, token) {
     if (token.type === "dircode") {
       const term = this._factory.literal(this._literalValue, { language: this._literalLanguage, direction: token.value });
-      if (component === "subject")
+      if (component2 === "subject")
         this._subject = term;
       else
         this._object = term;
       this._literalLanguage = void 0;
       token = null;
     }
-    if (component === "subject")
+    if (component2 === "subject")
       return token === null ? this._readPredicateOrNamedGraph : this._readPredicateOrNamedGraph(token);
     return this._completeObjectLiteralPost(token, listItem);
   }
@@ -5045,17 +5206,23 @@ var n3Parser = (input, uri, type) => {
   });
   return { quads, prefixes: prefixes2 };
 };
+var ResourceWriter = class extends N3Writer {
+  constructor(source, options) {
+    super(options);
+    this.source = source;
+    this.entries = Object.entries(options.prefixes);
+  }
+  _encodeIriOrBlank(term) {
+    if (term.termType != "NamedNode" || this._lineMode)
+      return super._encodeIriOrBlank(term);
+    const iri = absoluteIRI(term.value);
+    return turtlePrefixedIRI(iri, this.entries) ?? `<${this.source.relativeURI(iri)}>`;
+  }
+};
 var n3Writer = (source) => {
   return new Promise((resolve, reject) => {
-    const resourceUrl = source.url.split("#")[0];
     const prefixes2 = source.prefixDeclarations("source");
-    const hasResourcePrefix = Object.values(prefixes2).includes(`${resourceUrl}#`);
-    const writer = new N3Writer({
-      format: source.mimetype,
-      prefixes: prefixes2,
-      // N3 makes IRIs relative before matching prefixes; preserve declared resource prefixes.
-      baseIRI: hasResourcePrefix ? void 0 : resourceUrl
-    });
+    const writer = new ResourceWriter(source, { format: source.mimetype, prefixes: prefixes2 });
     const xsd4 = source.prefixes.xsd;
     const { quad: quad2, namedNode: namedNode2, literal: literal3, blankNode: blankNode2 } = N3DataFactory_default;
     const blankNodes = /* @__PURE__ */ new Map();
@@ -5187,7 +5354,8 @@ var n3Writer = (source) => {
     });
     writer.end((error, result) => {
       if (result) {
-        resolve(result);
+        resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .
+` + result);
       } else {
         reject(error);
       }

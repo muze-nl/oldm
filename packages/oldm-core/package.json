@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/oldm.mjs",
   "exports": {
-    ".": "./src/oldm.mjs"
+    ".": "./src/oldm.mjs",
+    "./iri": "./src/iri.mjs"
   },
   "sideEffects": false,
   "scripts": {

@@ -36,7 +36,7 @@ tap.test('n3Parser parses Turtle into OLDM public object shape', t => {
 `)
 
 	t.equal(String(source.primary.vcard$fn), 'Auke van Slooten')
-	t.same([...source.primary.a].sort(), ['foaf$Person', 'schema$Person'])
+	t.same([...source.primary.a].sort(), ['http://schema.org/Person', 'http://xmlns.com/foaf/0.1/Person'])
 	t.equal(source.primary.foaf$knows.id, 'https://example.org/profile/card#him')
 	t.equal(String(source.primary.foaf$knows.vcard$fn), 'Ben Peachey')
 	t.equal(source.primary.foaf$knows.foaf$knows, source.primary)
@@ -59,7 +59,7 @@ tap.test('n3Parser preserves xsd datatypes, language tags and collections', t =>
 `)
 
 	t.equal(String(source.primary.vcard$bday), '1972-09-20')
-	t.equal(source.primary.vcard$bday.type, 'xsd$date')
+	t.equal(source.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(String(source.primary.vcard$fn), 'Auke')
 	t.equal(source.primary.vcard$fn.language, 'nl')
 	t.ok(source.primary.schema$knowsAbout instanceof Collection)
@@ -136,7 +136,7 @@ tap.test('n3Writer serializes changed data that can be parsed back', async t => 
 	t.equal(String(roundtripped.primary.vcard$fn), 'Auke Cornelis van Slooten')
 	t.equal(roundtripped.primary.vcard$fn.language, 'nl')
 	t.equal(String(roundtripped.primary.vcard$bday), '1972-09-20')
-	t.equal(roundtripped.primary.vcard$bday.type, 'xsd$date')
+	t.equal(roundtripped.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(roundtripped.primary.foaf$knows.id, 'https://example.org/profile/card#him')
 	t.equal(String(roundtripped.primary.foaf$knows.vcard$fn), 'Ben')
 	t.same(many(roundtripped.primary.vcard$nickname).map(value => String(value)).sort(), ['Auke', 'Poef'])
@@ -204,7 +204,7 @@ tap.test('n3Writer preserves the type of a blank node', async t => {
 	const roundtripped = parse(await source.write())
 	const email = roundtripped.primary.vcard$hasEmail
 
-	t.equal(email.a, 'vcard$Email')
+	t.equal(email.a, 'http://www.w3.org/2006/vcard/ns#Email')
 	t.equal(email.vcard$value.id, 'mailto:auke@example.org')
 	t.end()
 })
@@ -363,5 +363,25 @@ _:shared schema:name "Amsterdam".
 
 	await t.rejects(source.patch(), /shared anonymous value/)
 
+	t.end()
+})
+
+
+tap.test('class and datatype IRIs survive writing without namespace rewriting', async t => {
+	const source = parse(`
+@prefix schema: <https://schema.org/>.
+<#me> a <http://schema.org/Person>;
+  <http://www.w3.org/2006/vcard/ns#bday> "1972-09-20"^^<http://schema.org/Date>.
+`)
+	const roundtrip = parse(await source.write())
+
+	t.equal(roundtrip.primary.a, 'http://schema.org/Person')
+	t.equal(roundtrip.primary.vcard$bday.type, 'http://schema.org/Date')
+
+	source.set(url, 'a', 'schema$Person')
+	const patch = await source.patch()
+	t.match(patch, /solid:deletes\s*\{[^}]*<http:\/\/schema.org\/Person>/)
+	t.match(patch, /solid:inserts\s*\{[^}]*schema:Person/)
+	t.notMatch(patch, /bday/)
 	t.end()
 })

@@ -88,29 +88,29 @@ tap.test('literal preserves an explicit no-language option', t => {
 })
 
 tap.test('literal creates a typed value without a graph', t => {
-	const value = core.literal('1972-09-20', {type: 'xsd$date'})
+	const value = core.literal('1972-09-20', {type: `${xsd}date`})
 
 	t.equal(String(value), '1972-09-20')
-	t.equal(value.type, 'xsd$date')
+	t.equal(value.type, `${xsd}date`)
 	t.end()
 })
 
 tap.test('literal copies existing metadata without changing the input', t => {
-	const original = core.literal('Auke', {type: 'rdf$langString', language: 'nl'})
+	const original = core.literal('Auke', {type: `${rdf}langString`, language: 'nl'})
 	const copy = core.literal(original, {language: 'en'})
 
 	t.not(copy, original)
-	t.equal(copy.type, 'rdf$langString')
+	t.equal(copy.type, `${rdf}langString`)
 	t.equal(copy.language, 'en')
 	t.equal(original.language, 'nl')
 	t.end()
 })
 
 tap.test('literal supports numeric values', t => {
-	const value = core.literal(42, {type: 'xsd$integer'})
+	const value = core.literal(42, {type: `${xsd}integer`})
 
 	t.equal(Number(value), 42)
-	t.equal(value.type, 'xsd$integer')
+	t.equal(value.type, `${xsd}integer`)
 	t.end()
 })
 
@@ -163,13 +163,13 @@ tap.test('parse exposes graph, primary, subjects, data, id and URI helpers', t =
 	t.equal(source.mimetype, 'text/turtle')
 	t.equal(source.primary.id, url)
 	t.equal(String(source.primary.vcard$fn), 'Auke')
-	t.equal(source.primary.a, 'schema$Person')
+	t.equal(source.primary.a, 'http://schema.org/Person')
 	t.equal(source.subjects[url], source.primary)
 	t.same(source.data.map(subject => subject.id).sort(), [other.id, url].sort())
 	t.equal(source.get(url), source.primary)
 	t.equal(source.fullURI('schema$Person'), `${schema}Person`)
 	t.equal(source.shortURI(`${schema}Person`), 'schema$Person')
-	t.equal(source.shortURI(`${url}/child`), '/child')
+	t.equal(source.shortURI(`${url}/child`), `${url}/child`)
 	t.equal(source.shortURI('https://unknown.example/Thing'), 'https://unknown.example/Thing')
 	t.equal(source.primary.graph, source)
 	t.notOk(Object.keys(source.primary).includes('graph'))
@@ -215,7 +215,93 @@ tap.test('source graphs prefer source prefixes while context subjects prefer cli
 	t.end()
 })
 
-tap.test('context class names use client prefixes while source classes keep source prefixes', t => {
+tap.test('graph and context values retain full IRIs while property names use prefixes', t => {
+	const ns = 'https://document.example/ns#'
+	const context = oldm({
+		parser: parserFor([
+			quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}Person`)),
+			quad(namedNode(url), namedNode(`${ns}name`), literal('Auke'))
+		], {doc: ns}),
+		prefixes: {client: ns}
+	})
+	const source = context.parse('', url, 'text/turtle')
+	const sourceSubject = source.get(url)
+	const contextSubject = context.get(url)
+
+	t.equal(sourceSubject.a, `${ns}Person`)
+	t.equal(contextSubject.a, `${ns}Person`)
+	t.equal(String(sourceSubject.doc$name), 'Auke')
+	t.equal(String(contextSubject.client$name), 'Auke')
+	t.equal(sourceSubject.doc$name.type, `${xsd}string`)
+	t.equal(contextSubject.client$name.type, `${xsd}string`)
+	t.end()
+})
+
+tap.test('class and datatype IRIs preserve their original namespace', t => {
+	const httpClass = 'http://schema.org/Person'
+	const httpsClass = 'https://schema.org/Person'
+	const datatype = 'http://schema.org/Date'
+	const context = oldm({
+		parser: parserFor([
+			quad(namedNode(url), namedNode(rdfType), namedNode(httpClass)),
+			quad(namedNode(url), namedNode(`${vcard}bday`),
+				literal('1972-09-20', datatype))
+		], {schema: 'https://schema.org/'})
+	})
+	const source = context.parse('', url, 'text/turtle')
+
+	t.equal(source.get(url).a, httpClass)
+	t.equal(context.get(url).a, httpClass)
+	t.equal(source.get(url).vcard$bday.type, datatype)
+	t.same(context.sources(url, 'a', httpClass), [source])
+	t.same(context.sources(url, 'a', httpsClass), [])
+	t.same(context.sources(url, 'a', 'schema$Person'), [])
+	t.end()
+})
+
+tap.test('class write helpers expand shorthand and store full IRIs', t => {
+	const context = contextFor([])
+	const source = context.parse('', url, 'text/turtle')
+
+	source.set(url, 'a', 'foaf$Person')
+	t.equal(source.get(url).a, `${foaf}Person`)
+	source.add(url, 'a', `${foaf}Person`)
+	t.equal(source.get(url).a, `${foaf}Person`)
+	source.add(url, 'a', 'foaf$Agent')
+	t.same(source.get(url).a, [`${foaf}Person`, `${foaf}Agent`])
+	t.equal(source.delete(url, 'a', 'foaf$Person'), true)
+	t.equal(source.get(url).a, `${foaf}Agent`)
+
+	context.set(url, 'a', 'foaf$Person')
+	t.equal(source.get(url).a, `${foaf}Person`)
+	t.equal(context.get(url).a, `${foaf}Person`)
+	context.get(url).a = 'foaf$Agent'
+	t.equal(source.get(url).a, `${foaf}Agent`)
+	t.same(context.sources(url, 'a', 'foaf$Agent'), [source])
+	t.same(context.sources(url, 'a', `${foaf}Agent`), [source])
+	t.end()
+})
+
+tap.test('datatype setters expand shorthand and preserve full IRIs', t => {
+	const ns = 'https://example.org/datatypes#'
+	const context = oldm({parser: parserFor([], {custom: ns})})
+	const source = context.parse('', url, 'text/turtle')
+
+	for (const owner of [source, context]) {
+		const date = owner.setType('1972-09-20', 'xsd$date')
+		const custom = owner.setType('value', 'custom$Code')
+		const explicit = owner.setType('value', `${ns}Code`)
+
+		t.equal(String(date), '1972-09-20')
+		t.equal(date.type, `${xsd}date`)
+		t.equal(owner.getType(date), `${xsd}date`)
+		t.equal(custom.type, `${ns}Code`)
+		t.equal(explicit.type, `${ns}Code`)
+	}
+	t.end()
+})
+
+tap.test('class IRIs are the same in context and source views', t => {
 	const ns = 'https://document.example/ns#'
 	for (const classes of [['Person'], ['Person', 'Agent']]) {
 		const context = oldm({
@@ -226,8 +312,8 @@ tap.test('context class names use client prefixes while source classes keep sour
 		})
 		const source = context.parse('', url, 'text/turtle')
 
-		t.same(many(context.get(url).a), classes.map(name => `client$${name}`))
-		t.same(many(source.get(url).a), classes.map(name => `doc$${name}`))
+		t.same(many(context.get(url).a), classes.map(name => `${ns}${name}`))
+		t.same(many(source.get(url).a), classes.map(name => `${ns}${name}`))
 	}
 	t.end()
 })
@@ -247,13 +333,13 @@ tap.test('context sources resolves class names using client or source prefixes o
 	t.same(context.sources(url, 'rdf$type', 'client$Person'), [source])
 	t.same(context.sources(url, 'a', `${ns}Person`), [source])
 	t.same(context.sources(url, 'a', 'client$Agent'), [])
-	t.equal(source.get(url).a, 'doc$Person')
+	t.equal(source.get(url).a, `${ns}Person`)
 	t.end()
 })
 
-tap.test('context class names fall back to source prefixes and then full IRIs', t => {
+tap.test('class IRIs do not depend on available source prefixes', t => {
 	const ns = 'https://document.example/ns#'
-	for (const [sourcePrefixes, expected] of [[{doc: ns}, 'doc$Person'], [{}, `${ns}Person`]]) {
+	for (const sourcePrefixes of [{doc: ns}, {}]) {
 		const context = oldm({
 			parser: parserFor([
 				quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}Person`))
@@ -261,8 +347,8 @@ tap.test('context class names fall back to source prefixes and then full IRIs', 
 		})
 		const source = context.parse('', url, 'text/turtle')
 
-		t.equal(context.get(url).a, expected)
-		t.same(context.sources(url, 'a', expected), [source])
+		t.equal(context.get(url).a, `${ns}Person`)
+		t.same(context.sources(url, 'a', `${ns}Person`), [source])
 	}
 	t.end()
 })
@@ -278,11 +364,11 @@ tap.test('context class aliases take precedence when a source reuses an alias', 
 	})
 	const source = context.parse('', url, 'text/turtle')
 
-	t.equal(context.get(url).a, 'local$Person')
+	t.equal(context.get(url).a, `${sourceNs}Person`)
 	t.same(context.sources(url, 'a', 'doc$Person'), [])
 	t.same(context.sources(url, 'a', 'local$Person'), [source])
 	t.same(context.sources(url, 'a', `${sourceNs}Person`), [source])
-	t.equal(source.get(url).a, 'doc$Person')
+	t.equal(source.get(url).a, `${sourceNs}Person`)
 	t.end()
 })
 
@@ -299,7 +385,7 @@ tap.test('context keeps the full class IRI when its source alias conflicts', t =
 	t.equal(context.get(url).a, `${ns}Person`)
 	t.same(context.sources(url, 'a', `${ns}Person`), [source])
 	t.same(context.sources(url, 'a', 'doc$Person'), [])
-	t.equal(source.get(url).a, 'doc$Person')
+	t.equal(source.get(url).a, `${ns}Person`)
 	t.end()
 })
 
@@ -314,10 +400,10 @@ tap.test('context merges the same class from graphs with different prefixes', t 
 		sources.push(context.parse('', `https://example.org/${prefix}`, 'text/turtle'))
 	}
 
-	t.equal(context.get(url).a, 'client$Person')
+	t.equal(context.get(url).a, `${ns}Person`)
 	t.same(context.sources(url, 'a', 'client$Person'), sources)
 	t.same(context.sources(url, 'a', `${ns}Person`), sources)
-	t.same(sources.map(source => source.get(url).a), ['first$Person', 'second$Person'])
+	t.same(sources.map(source => source.get(url).a), [`${ns}Person`, `${ns}Person`])
 	t.end()
 })
 
@@ -382,12 +468,12 @@ tap.test('parse resolves object references, blank nodes, collections, language a
 	]
 	const source = contextFor(quads).parse('', url, 'text/turtle')
 
-	t.same([...source.primary.a].sort(), ['foaf$Person', 'schema$Person'])
+	t.same([...source.primary.a].sort(), ['http://schema.org/Person', 'http://xmlns.com/foaf/0.1/Person'])
 	t.same(source.primary.vcard$fn.map(value => String(value)), ['Auke', 'Auke C.', 'Auke C. van Slooten'])
 	t.equal(String(source.primary.schema$name), 'Auke')
 	t.equal(source.primary.schema$name.language, 'nl')
 	t.equal(String(source.primary.vcard$bday), '1972-09-20')
-	t.equal(source.primary.vcard$bday.type, 'xsd$date')
+	t.equal(source.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(source.primary.foaf$knows.id, him.id)
 	t.equal(source.primary.foaf$knows.foaf$knows, source.primary)
 	t.equal(source.primary.vcard$hasEmail.vcard$value.id, 'mailto:auke@example.org')
@@ -419,7 +505,7 @@ tap.test('parse resolves a collection referenced before its list triples', t => 
 	t.end()
 })
 
-tap.test('custom separator changes shortened predicate and type names', t => {
+tap.test('custom separator changes property names but preserves class IRIs', t => {
 	const me = namedNode(url)
 	const quads = [
 		quad(me, namedNode(rdfType), namedNode(`${schema}Person`)),
@@ -432,7 +518,7 @@ tap.test('custom separator changes shortened predicate and type names', t => {
 	})
 	const source = context.parse('', url, 'text/turtle')
 
-	t.equal(source.primary.a, 'schema:Person')
+	t.equal(source.primary.a, 'http://schema.org/Person')
 	t.equal(String(source.primary['vcard:fn']), 'Auke')
 	t.equal(source.fullURI('schema:Person'), `${schema}Person`)
 	t.equal(source.shortURI(`${schema}Person`), 'schema:Person')
@@ -454,9 +540,9 @@ tap.test('literal metadata helpers set and read datatypes and languages', t => {
 
 	t.equal(plain, 'plain')
 	t.equal(String(date), '1972-09-20')
-	t.equal(source.getType(date), 'xsd$date')
+	t.equal(source.getType(date), 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(Number(count), 12)
-	t.equal(source.getType(count), 'xsd$integer')
+	t.equal(source.getType(count), 'http://www.w3.org/2001/XMLSchema#integer')
 	t.equal(String(name), 'Auke')
 	t.equal(name.language, 'nl')
 	t.equal(Number(numericName), 42)
@@ -760,7 +846,7 @@ tap.test('graph set, add and delete update only that graph', t => {
 	t.equal(source.get(url).foaf$knows.id, friendUrl)
 
 	source.set(url, 'a', [`${schema}Person`, `${foaf}Person`])
-	t.same(source.get(url).a, ['schema$Person', 'foaf$Person'])
+	t.same(source.get(url).a, ['http://schema.org/Person', 'http://xmlns.com/foaf/0.1/Person'])
 
 	t.equal(source.delete(url, 'schema$knowsAbout', 'web'), true)
 	t.equal(String(source.get(url).schema$knowsAbout), 'solid')
@@ -814,7 +900,7 @@ tap.test('graph add preserves different datatypes for the same text', t => {
 	source.add(url, 'vcard$bday', '1972-09-20')
 
 	t.same(many(source.get(url).vcard$bday).map(value => [String(value), value.type]), [
-		['1972-09-20', 'xsd$date'],
+		['1972-09-20', `${xsd}date`],
 		['1972-09-20', undefined]
 	])
 	t.end()
@@ -889,7 +975,7 @@ tap.test('graph delete with an ordinary string preserves other datatypes', t => 
 
 	t.equal(source.delete(url, 'vcard$bday', '1972-09-20'), false)
 	t.equal(source.get(url).vcard$bday, birthday)
-	t.equal(birthday.type, 'xsd$date')
+	t.equal(birthday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.end()
 })
 
@@ -1018,7 +1104,7 @@ tap.test('graph write helpers accept existing OLDM value objects', t => {
 	t.ok(source.get(url).schema$knowsAbout instanceof Collection)
 	t.same(source.get(url).schema$knowsAbout.map(value => value.id ?? String(value)), ['web', friend.id])
 	t.equal(source.get(url).schema$rating, 5)
-	t.equal(source.get(url).a, 'schema$Person')
+	t.equal(source.get(url).a, 'http://schema.org/Person')
 	t.throws(() => source.add(url, 'vcard$hasEmail', otherEmail), /different graph/)
 	t.throws(() => source.set(otherEmail, 'vcard$value', 'mailto:wrong@example.org'), /different graph/)
 
@@ -1169,5 +1255,49 @@ tap.test('source-only prefixes are still available after client and default pref
 
 	t.equal(String(graph.subjects[subjectUrl].game$score), '10')
 	t.equal(String(context.subjects[subjectUrl].game$score), '10')
+	t.end()
+})
+
+
+tap.test('IRI write boundaries reject unresolved shorthand without changing existing values', t => {
+	const context = contextFor([])
+	const source = context.parse('', url, 'text/turtle')
+	source.set(url, 'a', 'foaf$Person')
+
+	t.throws(() => source.set(url, 'a', 'missing$Person'), TypeError)
+	t.equal(source.get(url).a, `${foaf}Person`)
+	t.throws(() => source.add(url, 'a', 'missing$Person'), TypeError)
+	t.throws(() => source.get(url).addType('missing$Person'), TypeError)
+	for (const owner of [source, context]) {
+		const value = core.literal('value', {type: `${xsd}string`})
+		t.throws(() => owner.setType(value, 'missing$Type'), TypeError)
+		t.equal(value.type, `${xsd}string`)
+	}
+	t.throws(() => core.literal('value', {type: 'missing$Type'}), TypeError)
+	t.throws(() => core.literal('value', {type: 'xsd$string'}), TypeError)
+	t.equal(core.literal('value', {
+		type: context.fullURI('xsd$string')
+	}).type, `${xsd}string`)
+	t.end()
+})
+
+tap.test('graph datatype inputs expand using the write scope without mutating the input', t => {
+	const sourceNs = 'https://source.example/types#'
+	const clientNs = 'https://client.example/types#'
+	const context = oldm({
+		parser: parserFor([], {custom: sourceNs}),
+		prefixes: {custom: clientNs}
+	})
+	const source = context.parse('', url, 'text/turtle')
+	const value = new String('value')
+	value.type = 'custom$Code'
+
+	source.set(url, 'vcard$fn', value)
+	t.equal(source.get(url).vcard$fn.type, `${sourceNs}Code`)
+	context.set(url, 'vcard$fn', value)
+	t.equal(source.get(url).vcard$fn.type, `${clientNs}Code`)
+	t.equal(value.type, 'custom$Code')
+	t.equal(source.setType('value', 'custom$Code').type, `${sourceNs}Code`)
+	t.equal(context.setType('value', 'custom$Code').type, `${clientNs}Code`)
 	t.end()
 })

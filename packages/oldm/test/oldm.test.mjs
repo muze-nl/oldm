@@ -21,7 +21,7 @@ tap.test('friendly package exports one default object and installs globalThis.ol
 tap.test('oldm.literal values round-trip through the default writer', async t => {
 	const source = oldm.context().parse('', url, 'text/turtle')
 	source.set(url, 'vcard$fn', oldm.literal('Auke', {language: 'nl'}))
-	source.set(url, 'vcard$bday', oldm.literal('1972-09-20', {type: 'xsd$date'}))
+	source.set(url, 'vcard$bday', oldm.literal('1972-09-20', {type: source.context.fullURI('xsd$date')}))
 	source.set(url, 'schema$text', oldm.literal('https://example.org/'))
 	const roundtripped = oldm.context().parse(await source.write(), url, 'text/turtle')
 	const person = roundtripped.get(url)
@@ -29,9 +29,9 @@ tap.test('oldm.literal values round-trip through the default writer', async t =>
 	t.equal(String(person.vcard$fn), 'Auke')
 	t.equal(person.vcard$fn.language, 'nl')
 	t.equal(String(person.vcard$bday), '1972-09-20')
-	t.equal(person.vcard$bday.type, 'xsd$date')
+	t.equal(person.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(String(person.schema$text), 'https://example.org/')
-	t.equal(person.schema$text.type, 'xsd$string')
+	t.equal(person.schema$text.type, 'http://www.w3.org/2001/XMLSchema#string')
 	t.end()
 })
 
@@ -48,7 +48,7 @@ tap.test('friendly context uses N3 parser and writer by default', async t => {
 `, url, 'text/turtle')
 
 	t.equal(String(source.primary.vcard$fn), 'Auke')
-	t.equal(source.primary.a, 'schema$Person')
+	t.equal(source.primary.a, 'http://schema.org/Person')
 
 	const output = await source.write()
 	const roundtripped = oldm.context().parse(output, url, 'text/turtle')
