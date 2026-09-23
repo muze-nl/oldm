@@ -215,6 +215,112 @@ tap.test('source graphs prefer source prefixes while context subjects prefer cli
 	t.end()
 })
 
+tap.test('context class names use client prefixes while source classes keep source prefixes', t => {
+	const ns = 'https://document.example/ns#'
+	for (const classes of [['Person'], ['Person', 'Agent']]) {
+		const context = oldm({
+			parser: parserFor(classes.map(name =>
+				quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}${name}`))
+			), {doc: ns}),
+			prefixes: {client: ns}
+		})
+		const source = context.parse('', url, 'text/turtle')
+
+		t.same(many(context.get(url).a), classes.map(name => `client$${name}`))
+		t.same(many(source.get(url).a), classes.map(name => `doc$${name}`))
+	}
+	t.end()
+})
+
+tap.test('context sources resolves class names using client or source prefixes or full IRIs', t => {
+	const ns = 'https://document.example/ns#'
+	const context = oldm({
+		parser: parserFor([
+			quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}Person`))
+		], {doc: ns}),
+		prefixes: {client: ns}
+	})
+	const source = context.parse('', url, 'text/turtle')
+
+	t.same(context.sources(url, 'a', 'client$Person'), [source])
+	t.same(context.sources(url, 'a', 'doc$Person'), [source])
+	t.same(context.sources(url, 'rdf$type', 'client$Person'), [source])
+	t.same(context.sources(url, 'a', `${ns}Person`), [source])
+	t.same(context.sources(url, 'a', 'client$Agent'), [])
+	t.equal(source.get(url).a, 'doc$Person')
+	t.end()
+})
+
+tap.test('context class names fall back to source prefixes and then full IRIs', t => {
+	const ns = 'https://document.example/ns#'
+	for (const [sourcePrefixes, expected] of [[{doc: ns}, 'doc$Person'], [{}, `${ns}Person`]]) {
+		const context = oldm({
+			parser: parserFor([
+				quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}Person`))
+			], sourcePrefixes)
+		})
+		const source = context.parse('', url, 'text/turtle')
+
+		t.equal(context.get(url).a, expected)
+		t.same(context.sources(url, 'a', expected), [source])
+	}
+	t.end()
+})
+
+tap.test('context class aliases take precedence when a source reuses an alias', t => {
+	const sourceNs = 'https://document.example/ns#'
+	const contextNs = 'https://client.example/ns#'
+	const context = oldm({
+		parser: parserFor([
+			quad(namedNode(url), namedNode(rdfType), namedNode(`${sourceNs}Person`))
+		], {doc: sourceNs, local: sourceNs}),
+		prefixes: {doc: contextNs}
+	})
+	const source = context.parse('', url, 'text/turtle')
+
+	t.equal(context.get(url).a, 'local$Person')
+	t.same(context.sources(url, 'a', 'doc$Person'), [])
+	t.same(context.sources(url, 'a', 'local$Person'), [source])
+	t.same(context.sources(url, 'a', `${sourceNs}Person`), [source])
+	t.equal(source.get(url).a, 'doc$Person')
+	t.end()
+})
+
+tap.test('context keeps the full class IRI when its source alias conflicts', t => {
+	const ns = 'https://document.example/ns#'
+	const context = oldm({
+		parser: parserFor([
+			quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}Person`))
+		], {doc: ns}),
+		prefixes: {doc: 'https://client.example/ns#'}
+	})
+	const source = context.parse('', url, 'text/turtle')
+
+	t.equal(context.get(url).a, `${ns}Person`)
+	t.same(context.sources(url, 'a', `${ns}Person`), [source])
+	t.same(context.sources(url, 'a', 'doc$Person'), [])
+	t.equal(source.get(url).a, 'doc$Person')
+	t.end()
+})
+
+tap.test('context merges the same class from graphs with different prefixes', t => {
+	const ns = 'https://document.example/ns#'
+	const context = oldm({prefixes: {client: ns}})
+	const sources = []
+	for (const prefix of ['first', 'second']) {
+		context.parser = parserFor([
+			quad(namedNode(url), namedNode(rdfType), namedNode(`${ns}Person`))
+		], {[prefix]: ns})
+		sources.push(context.parse('', `https://example.org/${prefix}`, 'text/turtle'))
+	}
+
+	t.equal(context.get(url).a, 'client$Person')
+	t.same(context.sources(url, 'a', 'client$Person'), sources)
+	t.same(context.sources(url, 'a', `${ns}Person`), sources)
+	t.same(sources.map(source => source.get(url).a), ['first$Person', 'second$Person'])
+	t.end()
+})
+
 tap.test('schema.org http predicates use the canonical schema prefix', t => {
 	const me = namedNode(url)
 	const context = oldm({

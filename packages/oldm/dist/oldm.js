@@ -2282,6 +2282,15 @@ var Context = class {
     if (!hasValue) {
       return true;
     }
+    if (property == "a" && subject.graph instanceof Graph) {
+      const graph = subject.graph;
+      const requested = graph.fullURI(value?.id ?? value, null, "context");
+      const classURI = this.canonicalURI(requested);
+      return values(subject[property]).some((item) => {
+        const sourceURI = graph.fullURI(item, null, "source");
+        return this.canonicalURI(sourceURI) == classURI;
+      });
+    }
     return values(subject[property]).some((item) => sameSourceValue(item, value));
   }
   subjectID(subject) {
@@ -2331,7 +2340,17 @@ var Context = class {
       if (predicate == "id") {
         continue;
       }
-      const contextPredicate = predicate == "a" ? "a" : this.propertyName(source.graph.fullURI(predicate, null, "source"));
+      if (predicate == "a") {
+        const classes = values(value).map((item) => {
+          const classURI = source.graph.fullURI(item, null, "source");
+          return this.shortURI(classURI);
+        });
+        target.a = mergeValue(target.a, classes);
+        continue;
+      }
+      const contextPredicate = this.propertyName(
+        source.graph.fullURI(predicate, null, "source")
+      );
       target[contextPredicate] = mergeValue(
         target[contextPredicate],
         resolveValue(value, subjects, this)

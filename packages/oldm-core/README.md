@@ -46,9 +46,18 @@ Prefer `literal()` for new code. Deletion matching is unchanged by this helper.
 
 ## Prefix preference
 
-OLDM shortens predicate and type IRIs with the prefixes configured on the context. Prefix declarations found in Turtle input are parser conveniences; they do not decide the JavaScript property names exposed by OLDM.
+The combined context view shortens predicate and class IRIs using context
+prefixes first: client-provided prefixes, then OLDM defaults, then prefixes
+learned from parsed sources. Source graph views keep their source prefixes.
 
-When multiple prefixes point at the same namespace, client-provided prefixes are preferred over OLDM defaults, and defaults are preferred over prefixes found in a parsed source document. For example, both `pim:` and `space:` are common aliases for `http://www.w3.org/ns/pim/space#`. Since OLDM prefers `space` for that namespace, profile data using either `pim:storage` or `space:storage` is exposed as `space$storage` in JavaScript.
+Class names in `context.get(id).a` follow the same preference. If a source alias
+conflicts with a context definition, the context definition wins; another usable
+alias is chosen, or the full IRI is retained. `context.sources(id, 'a', className)`
+accepts context aliases, source aliases that do not conflict, and full IRIs.
+Classes with the same IRI merge even when their source prefixes differ.
+
+For example, configure `space` to prefer it over the default `pim` prefix in the
+combined context view:
 
 ```javascript
 const context = oldm({
@@ -59,7 +68,7 @@ const context = oldm({
 })
 
 const profile = context.parse(turtle, profileUrl, 'text/turtle')
-const me = profile.subjects[`${profileUrl}#me`]
+const me = context.get(`${profileUrl}#me`)
 
 console.log(me.space$storage.id)
 ```
