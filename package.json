@@ -12,7 +12,8 @@
     "coverage": "npm run coverage --workspaces --if-present",
     "build-dev": "npm run build-dev --workspace @muze-nl/oldm",
     "build": "npm run build --workspace @muze-nl/oldm",
-    "compare:turtle": "node scripts/compare-turtle.mjs"
+    "compare:turtle": "node scripts/compare-turtle.mjs",
+    "release": "node scripts/release.mjs"
   },
   "repository": {
     "type": "git",
@@ -27,7 +28,8 @@
   "devDependencies": {
     "esbuild": "0.20.2",
     "eslint": "^8.13.0",
-    "tap": "^21.7.4"
+    "tap": "^21.7.4",
+    "semver": "^7.8.5"
   },
   "engines": {
     "node": ">=20.0.0"
