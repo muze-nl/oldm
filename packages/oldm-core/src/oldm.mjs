@@ -1,9 +1,22 @@
+import {absoluteIRI, expandIRI, shortenIRI, relativeIRI, resolveIRIReference} from './iri.mjs'
+
+// Stop as soon as a matching namespace is found; avoid materializing all
+// context prefixes for every property in a combined graph view.
+function* orderedPrefixes(context)
+{
+	for (const prefix of context.prefixOrder) {
+		yield [prefix, context.prefixes[prefix]]
+	}
+}
+
 export default function oldm(options)
 {
 	return new Context(options)
 }
 
 export const rdfType = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+const rdfFirst = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'
+const rdfRest = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'
 
 export const aliases = {
 	'http://schema.org/': 'https://schema.org/'
@@ -28,6 +41,30 @@ export const prefixes = {
 	turtle: 'http://www.w3.org/ns/iana/media-types/text/turtle#',
 	vcard:  'http://www.w3.org/2006/vcard/ns#',
 	xsd:    'http://www.w3.org/2001/XMLSchema#'
+}
+
+export function literal(value, options={})
+{
+	let result
+	if (typeof value == 'string' || value instanceof String) {
+		result = new String(value)
+	}
+	else if (typeof value == 'number' || value instanceof Number) {
+		result = new Number(value)
+	}
+	else {
+		throw new TypeError('literal expects a string or number')
+	}
+
+	const type = options.type ?? value?.type
+	const language = options.language ?? value?.language
+	if (type !== undefined) {
+		result.type = absoluteIRI(type)
+	}
+	if (language !== undefined) {
+		result.language = language
+	}
+	return result
 }
 
 export function one(values, whichOne='last')
@@ -79,11 +116,12 @@ function values(value)
 	return [value]
 }
 
-function mergeValue(existing, value)
+function mergeValue(existing, value, graph=null)
 {
 	const result = values(existing)
 	for (const item of values(value)) {
-		if (!result.some(existingItem => sameValue(existingItem, item))) {
+		const comparable = normalizeStringLiteral(item, graph)
+		if (!result.some(existingItem => sameValue(normalizeStringLiteral(existingItem, graph), comparable))) {
 			result.push(item)
 		}
 	}
@@ -120,6 +158,20 @@ function sameValue(left, right)
 			&& left?.language == right?.language
 	}
 	return false
+}
+
+function normalizeStringLiteral(value, graph)
+{
+	if (!graph || (typeof value != 'string' && !(value instanceof String))) {
+		return value
+	}
+	const defaultType = value.language
+		? 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString'
+		: 'http://www.w3.org/2001/XMLSchema#string'
+	return literal(value, {
+		type: graph.fullURI(value.type ?? defaultType),
+		language: value.language ?? ''
+	})
 }
 
 
@@ -204,6 +256,7 @@ export class Context {
 		this.graphsByUrl = Object.create(null)
 		this.defaultGraph = options?.defaultGraph ?? null
 		this.separator = options?.separator ?? '$'
+		this.baseURI = options?.baseURI
 		this.aliases = {...aliases, ...(options?.aliases ?? {})}
 
 		Object.defineProperty(this, 'subjects', {
@@ -225,13 +278,7 @@ export class Context {
 		if (prefixes) {
 			for (let prefix in prefixes) {
 				let prefixURL = prefixes[prefix]
-				if (prefixURL.match(/^http(s?):\/\/$/i)) {
-					prefixURL += url.substring(prefixURL.length)
-				} else try {
-					prefixURL = new URL(prefixes[prefix], url).href
-				} catch(err) {
-					console.error('Could not parse prefix', prefixes[prefix], err.message)
-				}
+				prefixURL = resolveIRIReference(prefixURL, url)
 
 				if (!this.prefixes[prefix]) {
 					this.prefixes[prefix] = prefixURL
@@ -395,13 +442,18 @@ export class Context {
 		}
 
 		const property = subject.graph instanceof Graph
-			? subject.graph.propertyName(this.fullURI(predicate), 'context')
+			? subject.graph.propertyName(predicate == 'a' ? rdfType : this.fullURI(predicate), 'context')
 			: this.propertyName(predicate)
 		if (!(property in subject)) {
 			return false
 		}
 		if (!hasValue) {
 			return true
+		}
+
+		if (property == 'a' && subject.graph instanceof Graph) {
+			const graph = subject.graph
+			value = graph.fullURI(value?.id ?? value, null, 'context')
 		}
 
 		return values(subject[property]).some(item => sameSourceValue(item, value))
@@ -423,10 +475,11 @@ export class Context {
 		if (predicate?.id) {
 			predicate = predicate.id
 		}
-		if (predicate == 'a' || predicate == rdfType || this.fullURI(predicate) == rdfType) {
+		const fullPredicate = predicate == 'a' ? rdfType : this.fullURI(predicate)
+		if (fullPredicate == rdfType) {
 			return 'a'
 		}
-		return this.shortURI(this.fullURI(predicate))
+		return shortenIRI(fullPredicate, orderedPrefixes(this), this.separator, iri => this.canonicalURI(iri))
 	}
 
 	get(shortID)
@@ -513,31 +566,19 @@ export class Context {
 		}
 	}
 
-	fullURI(shortURI, separator=null)
+	fullURI(value, separator=null)
 	{
-		if (!separator) {
-			separator = this.separator
-		}
-		const [prefix, path] = shortURI.split(separator)
-		if (path && this.prefixes[prefix]) {
-			return this.prefixes[prefix]+path 
-		}
-		return shortURI
+		return expandIRI(value, prefix => Object.hasOwn(this.prefixes, prefix) ? this.prefixes[prefix] : undefined, separator ?? this.separator, this.baseURI)
 	}
 
-	shortURI(fullURI, separator=null)
+	shortURI(iri, separator=null)
 	{
-		if (!separator) {
-			separator = this.separator
-		}
-		fullURI = this.canonicalURI(fullURI)
-		for (const prefix of this.prefixOrder) {
-			const iri = this.canonicalURI(this.prefixes[prefix])
-			if (fullURI.startsWith(iri)) {
-				return prefix + separator + fullURI.substring(iri.length)
-			}
-		}
-		return fullURI
+		return shortenIRI(absoluteIRI(iri), orderedPrefixes(this), separator ?? this.separator)
+	}
+
+	relativeURI(iri, base=this.baseURI)
+	{
+		return relativeIRI(iri, base, this.separator)
 	}
 
 	canonicalURI(uri)
@@ -564,7 +605,7 @@ export class Context {
 		if (typeof literal !== 'object') {
 			throw new Error('cannot set type on ',literal,shortType)
 		}
-		literal.type = shortType
+		literal.type = this.fullURI(shortType)
 		return literal
 	}
 
@@ -585,33 +626,19 @@ export class Graph
 	{
 		this.mimetype = mimetype
 		this.url      = url
+		this.baseURI = url.split('#')[0]
 		this.prefixes = prefixes
 		this.context  = context
 		this.originalSource = originalSource
 		this.subjects = Object.create(null)
+		this.#readCollections(quads)
 		for (let quad of quads) {
 			let subject
 			if (quad.subject.termType=='BlankNode') {
-				let shortPred = this.shortURI(quad.predicate.id,':')
-				let shortObj
-				switch(shortPred) {
-					case 'rdf:first':
-						subject = this.addCollection(quad.subject.id)
-						shortObj = quad.object.id ? this.shortURI(quad.object.id, ':') : null
-						if (shortObj!='rdf:nil') {
-							const value = this.getValue(quad.object)
-							if (value) {
-								subject.push(value)
-							}
-						}
+				if (quad.predicate.id == rdfFirst || quad.predicate.id == rdfRest) {
 					continue
-					case 'rdf:rest':
-						this.#blankNodes[quad.object.id] = this.#blankNodes[quad.subject.id]
-					continue
-					default:
-						subject = this.addBlankNode(quad.subject.id)
-					break
 				}
+				subject = this.addBlankNode(quad.subject.id)
 			} else {
 				subject = this.addNamedNode(quad.subject.id)
 			}
@@ -629,10 +656,45 @@ export class Graph
 		})
 	}
 
+	#readCollections(quads)
+	{
+		const first = new Map()
+		const rest = new Map()
+		for (const quad of quads) {
+			if (quad.subject.termType != 'BlankNode') {
+				continue
+			}
+			if (quad.predicate.id == rdfFirst) {
+				first.set(quad.subject.id, quad.object)
+			}
+			else if (quad.predicate.id == rdfRest) {
+				rest.set(quad.subject.id, quad.object.id)
+			}
+		}
+
+		const collections = new Map()
+		for (const quad of quads) {
+			if (quad.object.termType == 'BlankNode'
+				&& quad.predicate.id != rdfRest && first.has(quad.object.id)) {
+				collections.set(quad.object.id, this.addCollection(quad.object.id))
+			}
+		}
+
+		for (const [head, collection] of collections) {
+			const visited = new Set()
+			let id = head
+			while (first.has(id) && !visited.has(id)) {
+				visited.add(id)
+				collection.push(this.getValue(first.get(id)))
+				id = rest.get(id)
+			}
+		}
+	}
+
 	addNamedNode(uri)
 	{
 		// make sure any relative uri subject ids are fully qualified
-		let absURI = new URL(uri, this.url).href
+		const absURI = this.fullURI(uri)
 		if (!this.subjects[absURI]) {
 			this.subjects[absURI] = new NamedNode(absURI, this)
 		}
@@ -724,11 +786,11 @@ export class Graph
 		if (predicate?.id) {
 			predicate = predicate.id
 		}
-		const fullPredicate = this.fullURI(predicate, null, preference)
+		const fullPredicate = predicate == 'a' ? rdfType : this.fullURI(predicate, null, preference)
 		if (predicate == 'a' || fullPredicate == rdfType) {
 			return 'a'
 		}
-		return this.shortURI(fullPredicate, null, 'source')
+		return shortenIRI(fullPredicate, this.prefixEntries('source'), this.context.separator, iri => this.context.canonicalURI(iri))
 	}
 
 	set(subject, predicate, value, options={})
@@ -754,7 +816,7 @@ export class Graph
 			? this.normalizeTypeValues(value, preference)
 			: this.normalizeValues(value, preference)
 
-		node[property] = mergeValue(node[property], newValue)
+		node[property] = mergeValue(node[property], newValue, this)
 		return node
 	}
 
@@ -787,11 +849,12 @@ export class Graph
 			return true
 		}
 
-		const deleteValues = property == 'a'
+		const deleteValues = (property == 'a'
 			? values(this.normalizeTypeValues(value, preference))
-			: values(this.normalizeValues(value, preference))
+			: values(this.normalizeValues(value, preference)))
+			.map(item => normalizeStringLiteral(item, this))
 		const remaining = values(node[property])
-			.filter(item => !deleteValues.some(deleteValue => sameValue(item, deleteValue)))
+			.filter(item => !deleteValues.some(deleteValue => sameValue(normalizeStringLiteral(item, this), deleteValue)))
 
 		if (remaining.length == values(node[property]).length) {
 			return false
@@ -857,6 +920,13 @@ export class Graph
 			}
 			return value
 		}
+		if ((value instanceof String || value instanceof Number)
+			&& value.type !== undefined) {
+			const type = this.fullURI(value.type, null, preference)
+			if (type !== value.type) {
+				return literal(value, {type})
+			}
+		}
 		if (this.looksLikeURI(value, preference)) {
 			return this.addNamedNode(this.fullURI(value, null, preference))
 		}
@@ -873,10 +943,7 @@ export class Graph
 
 	normalizeTypeValue(value, preference='source')
 	{
-		if (value instanceof NamedNode) {
-			return this.shortURI(value.id, null, 'source')
-		}
-		return this.shortURI(this.fullURI(value, null, preference), null, 'source')
+		return this.fullURI(value, null, preference)
 	}
 
 	looksLikeURI(value, preference='source')
@@ -887,42 +954,23 @@ export class Graph
 		if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
 			return true
 		}
-		const [prefix, path] = value.split(this.context.separator)
-		return Boolean(path && this.prefixEntries(preference).some(([candidate]) => candidate == prefix))
+		const index = value.indexOf(this.context.separator)
+		return index >= 0 && this.prefixEntries(preference).some(([prefix]) => prefix == value.slice(0, index))
 	}
 
-	fullURI(shortURI, separator=null, preference='source')
+	fullURI(value, separator=null, preference='source')
 	{
-		if (!separator) {
-			separator = this.context.separator
-		}
-		const [prefix, path] = String(shortURI).split(separator)
-		if (path) {
-			for (const [candidate, iri] of this.prefixEntries(preference)) {
-				if (candidate == prefix) {
-					return iri+path
-				}
-			}
-		}
-		return shortURI
+		return expandIRI(value, prefix => this.prefixEntries(preference).find(([name]) => name == prefix)?.[1], separator ?? this.context.separator, this.baseURI)
 	}
 
-	shortURI(fullURI, separator=null, preference='source')
+	shortURI(iri, separator=null, preference='source')
 	{
-		if (!separator) {
-			separator = this.context.separator
-		}
-		fullURI = this.context.canonicalURI(fullURI)
-		for (const [prefix, iri] of this.prefixEntries(preference)) {
-			const canonicalIRI = this.context.canonicalURI(iri)
-			if (fullURI.startsWith(canonicalIRI)) {
-				return prefix + separator + fullURI.substring(canonicalIRI.length)
-			}
-		}
-		if (this.url && fullURI.startsWith(this.url)) {
-			return fullURI.substring(this.url.length)
-		}
-		return fullURI
+		return shortenIRI(absoluteIRI(iri), this.prefixEntries(preference), separator ?? this.context.separator)
+	}
+
+	relativeURI(iri, base=this.baseURI)
+	{
+		return relativeIRI(iri, base, this.context.separator)
 	}
 
 	/**
@@ -930,8 +978,8 @@ export class Graph
 	 */
 	setType(literal, type)
 	{
-		const shortType = this.shortURI(type)
-		return this.context.setType(literal, shortType)
+		const fullType = this.fullURI(type)
+		return this.context.setType(literal, fullType)
 	}
 
 	/**
@@ -942,18 +990,16 @@ export class Graph
 		return this.context.getType(literal)
 	}
 
-	setLanguage(literal, language)
+	setLanguage(value, language)
 	{
-		if (typeof literal == 'string') {
-			literal = new String(literal)
-		} else if (typeof literal == 'number') {
-			literal = new Number(literal)
+		if (typeof value == 'string' || typeof value == 'number') {
+			value = literal(value)
 		}
-		if (typeof literal !== 'object') {
-			throw new Error('cannot set language on ',literal)
+		if (typeof value !== 'object') {
+			throw new Error('cannot set language on ',value)
 		}
-		literal.language = language
-		return literal
+		value.language = language
+		return value
 	}
 
 	getValue(object)
@@ -967,7 +1013,7 @@ export class Graph
 			}
 			let language = object.language
 			if (language) {
-				result = this.setLanguage(result, language)
+				result = literal(result, {language})
 			}
 		} else if (object.termType=='BlankNode') {
 			result = this.addBlankNode(object.id)
@@ -998,11 +1044,10 @@ export class BlankNode
 			predicate = predicate.id
 		}
 		if (predicate==rdfType) {
-			let type = this.graph.shortURI(object.id)
-			this.addType(type)
+			this.addType(object.id)
 		} else {
 			const value = this.graph.getValue(object)
-			predicate = this.graph.shortURI(predicate)
+			predicate = this.graph.propertyName(predicate)
 			if (!this[predicate]) {
 				this[predicate] = value
 			} else if (Array.isArray(this[predicate])) {
@@ -1020,6 +1065,7 @@ export class BlankNode
 	 */
 	addType(type)
 	{
+		type = this.graph.fullURI(type)
 		if (!this.a) {
 			this.a = type
 		} else {

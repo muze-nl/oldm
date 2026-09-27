@@ -1,3 +1,4 @@
+import {absoluteIRI, resolveIRIReference, turtlePrefixedIRI} from '@muze-nl/oldm-core/iri'
 import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 
 const RDF_FIRST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'
@@ -374,18 +375,22 @@ class TurtleParser {
 	}
 
 	readLocalName() {
-		const start = this.#position
+		let local = ''
 		while (!this.done()) {
 			const char = this.peek()
-			if (/\s/.test(char) || [';', ',', '.', '[', ']', '(', ')', '<', '>', '"', "'"].includes(char)) {
-				break
+			if (char == '\\') {
+				this.#position++
+				const escaped = this.next()
+				if (!escaped || !"_~.-!$&'()*+,;=/?#@%".includes(escaped)) this.error('Invalid local-name escape')
+				local += escaped
+				continue
 			}
-			if (char == '#') {
-				break
-			}
+			if (/\s/.test(char) || [';', ',', '[', ']', '(', ')', '<', '>', '"', "'", '#'].includes(char)) break
+			if (char == '.' && (!this.#input[this.#position+1] || /[\s;,\[\]()#]/.test(this.#input[this.#position+1]))) break
+			local += char
 			this.#position++
 		}
-		return this.#input.slice(start, this.#position)
+		return local
 	}
 
 	readChars(length) {
@@ -405,11 +410,7 @@ class TurtleParser {
 	}
 
 	resolveIRI(iri) {
-		try {
-			return new URL(iri, this.#base).href
-		} catch(err) {
-			return iri
-		}
+		return resolveIRIReference(iri, this.#base)
 	}
 
 	newBlankNode() {
@@ -494,16 +495,18 @@ export const turtleWriter = async (source) => {
 
 class TurtleWriter {
 	#source
+	#prefixes
 	#blankNode = 0
 	#blankNodeIds = new WeakMap()
 
 	constructor(source) {
 		this.#source = source
+		this.#prefixes = source.prefixEntries('source')
 	}
 
 	write() {
-		const lines = []
-		for (const [prefix, iri] of Object.entries(this.#source.prefixDeclarations('source'))) {
+		const lines = [`@base <${absoluteIRI(this.#source.baseURI)}> .`]
+		for (const [prefix, iri] of this.#prefixes) {
 			lines.push(`@prefix ${prefix}: <${this.escapeIRI(iri)}> .`)
 		}
 		if (lines.length) {
@@ -581,18 +584,15 @@ class TurtleWriter {
 		}
 
 		const type = this.#source.getType(value)
-		if (!type || type == 'xsd$string') {
+		if (!type || type == XSD+'string' || type == 'xsd$string') {
 			return quoted
 		}
 		return `${quoted}^^${this.resource(this.#source.fullURI(type))}`
 	}
 
 	resource(id) {
-		const short = this.#source.shortURI(id, ':')
-		if ((short != id && /^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short)) || /^:[^\s]*$/.test(short) || short == 'a') {
-			return short
-		}
-		return `<${this.escapeIRI(id)}>`
+		return turtlePrefixedIRI(absoluteIRI(id), this.#prefixes)
+			?? `<${this.#source.relativeURI(id)}>`
 	}
 
 	values(value) {
@@ -972,7 +972,7 @@ function formula(source, quads)
 
 function quadToString(source, quad)
 {
-	return `${termToString(source, quad.subject)} ${termToString(source, quad.predicate)} ${termToString(source, quad.object)} .`
+	return `${termToString(source, quad.subject)} ${quad.predicate.id == rdfType ? 'a' : termToString(source, quad.predicate)} ${termToString(source, quad.object)} .`
 }
 
 function termToString(source, term)
@@ -1007,14 +1007,7 @@ function literalToString(source, term)
 
 function resource(source, id)
 {
-	if (id == rdfType) {
-		return 'a'
-	}
-	const short = source.shortURI(id, ':')
-	if ((short != id && /^[A-Za-z][A-Za-z0-9_-]*:[^/].*$/.test(short)) || /^:[^\s]*$/.test(short)) {
-		return short
-	}
-	return `<${escapeIRI(id)}>`
+	return turtlePrefixedIRI(absoluteIRI(id), source.prefixEntries('source')) ?? `<${id}>`
 }
 
 function escapeIRI(value)

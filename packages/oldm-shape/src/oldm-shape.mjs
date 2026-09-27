@@ -1011,8 +1011,9 @@ function hasType(subject, type)
 	if (!type) {
 		return true
 	}
+	const classIRI = subject.graph?.fullURI(type) ?? type
 	const types = manyOldm(subject.a)
-	return types.some(item => item == type || item?.id == type)
+	return types.some(item => item == classIRI || item?.id == classIRI)
 }
 
 function namedNodeID(value)

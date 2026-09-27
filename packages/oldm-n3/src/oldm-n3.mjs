@@ -1,3 +1,4 @@
+import {absoluteIRI, turtlePrefixedIRI} from '@muze-nl/oldm-core/iri'
 import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 import { Parser, Writer, DataFactory } from 'n3'
 
@@ -17,60 +18,69 @@ export const n3Parser = (input, uri, type) => {
     return { quads, prefixes }
 }
 
+// N3's default encoder relativizes before checking prefixes. Override its term
+// encoder so prefix selection and exact relative round trips match the small writer.
+class ResourceWriter extends Writer {
+	constructor(source, options) {
+		super(options)
+		this.source = source
+		this.entries = Object.entries(options.prefixes)
+	}
+
+	_encodeIriOrBlank(term) {
+		if (term.termType != 'NamedNode' || this._lineMode) return super._encodeIriOrBlank(term)
+		const iri = absoluteIRI(term.value)
+		return turtlePrefixedIRI(iri, this.entries) ?? `<${this.source.relativeURI(iri)}>`
+	}
+}
+
 /**
  * Loops over all subjects in a source
  * and writes quads using n3.Writer
  * NamedNode objects are also in the subjects list, so
  * only need their object.id in a quad
- * BlankNodes use writer.blank, lists (collection) writer.list
- * blank expects an array of [predicate, object] pairs
- * so only write object blanks, lists and literals, use object.id for the rest
+ * BlankNodes reuse one RDF identifier per object and write their properties once.
+ * Collections use writer.list; named-node references use object.id.
  */
 export const n3Writer = (source) => {
 	return new Promise((resolve, reject) => {
-		const writer = new Writer({
-			format: source.mimetype,
-			prefixes: source.prefixDeclarations('source')
-		})
+		const prefixes = source.prefixDeclarations('source')
+		const writer = new ResourceWriter(source, {format: source.mimetype, prefixes})
+
 		const xsd = source.prefixes.xsd
 		const {quad, namedNode, literal, blankNode} = DataFactory
+		const blankNodes = new Map()
 
-		const writeClassNames = (id, subject) => {
+		const getClassPredicates = (subject) => {
+			const predicates = []
 			let classNames = subject.a
 			if (!classNames) {
-				return
+				return predicates
 			}
 			if (!Array.isArray(classNames)) {
 				classNames = [ classNames ]
 			}
-			if (classNames?.length) {
-				for(let name of classNames) {
-					name = source.fullURI(name)
-					writer.addQuad(quad(
-						namedNode(id),
-						namedNode(rdfType),
-						namedNode(name)
-					))
-				}
-			}			
+			for (const name of classNames) {
+				predicates.push({
+					predicate: namedNode(rdfType),
+					object: namedNode(source.fullURI(name))
+				})
+			}
+			return predicates
 		}
 
-		const writeProperties = (id, subject) => {
+		const writeProperties = (subjectNode, subject) => {
 			if (!subject) {
 				return
 			}
 			let preds = getPredicates(subject)
 			for (let pred of preds) {
-				if (pred.predicate.id=='id' || pred.predicate.id=='a') {
-					/* these are handled explicitly elsewhere */
-					continue
-				}
 				if (!Array.isArray(pred.object)) {
 					pred.object = [ pred.object ]
 				}
 				for (let o of pred.object ) {
 					writer.addQuad(quad(
-						namedNode(id),
+						subjectNode,
 						pred.predicate,
 						o
 					))
@@ -79,9 +89,12 @@ export const n3Writer = (source) => {
 		}
 
 		const getPredicates = (object) => {
-			let preds = []
+			let preds = getClassPredicates(object)
 			Object.entries(object).forEach(entry => {
 				const predicate = entry[0]
+				if (predicate == 'id' || predicate == 'a') {
+					return
+				}
 				let object = entry[1]
 				const fullPred = source.fullURI(predicate)
 				let pred = {
@@ -106,8 +119,13 @@ export const n3Writer = (source) => {
 		}
 
 		const getLiteral = (object) => {
+			const language = object?.language
 			let type = source.getType(object) || undefined
-			if (type) {
+			if (language) {
+				// N3 treats a string second argument as a language tag.
+				type = language
+			}
+			else if (type) {
 				if (type == xsd+source.context.separator+'string' 
 					|| type == xsd+source.context.separator+'number') {
 					type = undefined
@@ -115,11 +133,6 @@ export const n3Writer = (source) => {
 					type = source.fullURI(type)
 				}
 				type = namedNode(type)
-			} else {
-				let language = object?.language
-				if (language) {
-					type = language // is automatically detected as language by literal()
-				}
 			}
 			if (object instanceof String) {
 				object = ''+object
@@ -155,7 +168,12 @@ export const n3Writer = (source) => {
 
 
 		const getBlankNode = (object) => {
-			return writer.blank(getPredicates(object))
+			if (!blankNodes.has(object)) {
+				const node = blankNode()
+				blankNodes.set(object, node)
+				writeProperties(node, object)
+			}
+			return blankNodes.get(object)
 		}
 
 		const getArray = (object) => {
@@ -180,16 +198,12 @@ export const n3Writer = (source) => {
 		}
 
 		Object.entries(source.subjects).forEach(([id,subject]) => {
-			id = source.shortURI(id, ':')
-			
-			writeClassNames(id, subject)
-
-			writeProperties(id, subject)			
+			writeProperties(namedNode(id), subject)
 		})
 
 		writer.end((error, result) => {
 			if (result) {
-				resolve(result)
+				resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .\n`+result)
 			} else {
 				reject(error)
 			}
@@ -268,17 +282,26 @@ function solidPatchChanges(original, current, factory)
 	const anonymousDeletes = []
 	const anonymousInserts = []
 	const where = []
+	const originalTerms = new Map()
+	const replacementTerms = new Map()
 
 	for (const unit of deletedUnits) {
 		assertOwnedAnonymousUnit(unit, 'delete')
-		const variableQuads = mapBlankNodes(unit.quads, name => factory.variable(name), factory.quad, 'old')
+		const variableQuads = mapBlankNodes(
+			unit.quads, name => factory.variable(name), factory.quad,
+			'old', originalTerms
+		)
 		where.push(...variableQuads)
 		anonymousDeletes.push(...variableQuads)
 	}
 
 	for (const unit of insertedUnits) {
 		assertOwnedAnonymousUnit(unit, 'insert')
-		anonymousInserts.push(...mapBlankNodes(unit.quads, name => factory.blankNode(name), factory.quad, 'insert'))
+		const insertedQuads = mapBlankNodes(
+			unit.quads, name => factory.blankNode(name), factory.quad,
+			'insert', replacementTerms
+		)
+		anonymousInserts.push(...insertedQuads)
 	}
 
 	const plainOriginal = original.filter(quad => !originalAnonymous.quadKeys.has(quadKey(quad)))
@@ -463,9 +486,8 @@ function assertOwnedAnonymousUnit(unit, operation)
 	}
 }
 
-function mapBlankNodes(quads, createTerm, createQuad, prefix)
+function mapBlankNodes(quads, createTerm, createQuad, prefix, terms)
 {
-	const terms = new Map()
 	const mapTerm = term => {
 		if (!isBlankNode(term)) {
 			return term

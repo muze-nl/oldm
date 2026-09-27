@@ -159,11 +159,11 @@ tap.test('toOldm maps JavaScript objects to OLDM subjects', t => {
 	const subject = Contact.toOldm(contact, graph)
 
 	t.equal(subject.id, contact.id)
-	t.equal(subject.a, 'vcard$Individual')
+	t.equal(subject.a, 'http://www.w3.org/2006/vcard/ns#Individual')
 	t.equal(String(subject.vcard$fn), 'Auke')
 	t.equal(String(subject.vcard$nickname), 'poef')
 	t.equal(String(subject.vcard$bday), '1972-09-20')
-	t.equal(subject.vcard$bday.type, 'xsd$date')
+	t.equal(subject.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(subject.vcard$hasEmail.vcard$value.id, 'mailto:auke@example.org')
 	t.ok(subject.foaf$knows[0] instanceof NamedNode)
 	t.same(subject.foaf$knows.map(value => value.id), contact.knows)

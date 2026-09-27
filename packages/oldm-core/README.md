@@ -16,26 +16,130 @@ const context = oldm({
 ```
 
 
-## Prefix preference
+## Literal values
 
-OLDM shortens predicate and type IRIs with the prefixes configured on the context. Prefix declarations found in Turtle input are parser conveniences; they do not decide the JavaScript property names exposed by OLDM.
+Create literals without a graph or parser:
 
-When multiple prefixes point at the same namespace, client-provided prefixes are preferred over OLDM defaults, and defaults are preferred over prefixes found in a parsed source document. For example, both `pim:` and `space:` are common aliases for `http://www.w3.org/ns/pim/space#`. Since OLDM prefers `space` for that namespace, profile data using either `pim:storage` or `space:storage` is exposed as `space$storage` in JavaScript.
+```javascript
+import { literal } from '@muze-nl/oldm-core'
+
+const name = literal('Auke', { language: 'nl-NL' })
+const plainName = literal('Auke', { language: '' })
+const birthday = literal('1972-09-20', {
+  type: 'http://www.w3.org/2001/XMLSchema#date'
+})
+const text = literal('https://example.org/')
+```
+
+`literal(value, options)` accepts strings and numbers, including boxed values.
+It returns a fresh boxed value with optional `.language` and `.type` metadata.
+Existing metadata is copied unless overridden; the input is not modified.
+An explicit empty language is retained as `language: ''`. A supplied datatype
+must be a full IRI: this standalone constructor has no prefix context. Expand
+shorthand explicitly with `context.fullURI('xsd$date')` when needed.
+
+Pass these values to `graph.set()` or `context.set()` like other OLDM values.
+Boxing keeps URL-shaped text a literal instead of letting it become a named node.
+Use `String(value)` or `Number(value)` to obtain its primitive value.
+
+`graph.setLanguage(value, language)` remains available for compatibility,
+including its existing behavior of modifying an already boxed value in place.
+Prefer `literal()` for new code. Deletion matching is unchanged by this helper.
+
+## Property prefixes and IRI values
+
+Only property names are shortened. Class values (`subject.a`) and literal
+datatypes (`value.type`, when present) are full IRIs in both source graphs and
+combined context views. Linked objects retain their full IRI in `.id`.
+
+Property names in source graphs prefer source prefixes. Combined context views
+prefer client-provided prefixes, then OLDM defaults, then source prefixes.
+Namespace aliases, such as OLDM's schema.org HTTP/HTTPS mapping, apply to
+property-name shortening; value IRIs retain their original namespace.
 
 ```javascript
 const context = oldm({
   parser: n3Parser,
-  prefixes: {
-    space: 'http://www.w3.org/ns/pim/space#'
-  }
+  prefixes: { person: 'http://xmlns.com/foaf/0.1/' }
 })
+const graph = context.parse(turtle, profileUrl, 'text/turtle')
+const me = context.get(`${profileUrl}#me`)
 
-const profile = context.parse(turtle, profileUrl, 'text/turtle')
-const me = profile.subjects[`${profileUrl}#me`]
-
-console.log(me.space$storage.id)
+me.a // 'http://xmlns.com/foaf/0.1/Person', or an array of class IRIs
+const personClass = context.fullURI('person$Person')
+many(me.a).includes(personClass)
 ```
 
+`graph.set/add/delete()` and context write helpers still accept shorthand class
+inputs. They expand the input once using the receiving graph or context's
+prefixes. `graph.setType()` and `context.setType()` do the same for datatypes.
+Unresolved shorthand such as `missing$Person` is rejected at these write
+boundaries. Relative class/datatype references on a graph resolve against its
+URL; standalone values and context datatype setters require absolute IRIs.
+Absolute IRIs, including URNs, are accepted without namespace rewriting.
+
+`context.sources(id, 'a', className)` accepts a full IRI or shorthand, preferring
+context prefixes and falling back to non-conflicting source prefixes. Matching
+compares exact IRIs: HTTP and HTTPS namespaces are distinct. For repeated
+filtering, expand the requested class once outside the loop.
+
+Source subjects remain ordinary objects. When assigning `subject.a` or literal
+metadata directly, supply full IRIs. Context subject assignment still delegates
+to the context write helpers. Turtle output may use prefixes or relative IRIs
+without changing the represented value.
+
+### URI helpers and relative references
+
+`fullURI(value)` always returns a valid absolute IRI or throws `TypeError`.
+It expands a known prefix by exact string concatenation, preserving the entire
+suffix, including an empty suffix. Relative references use RFC 3986 base
+resolution. Absolute inputs are validated without normalization: case, Unicode,
+percent escapes, and namespace identity are preserved.
+
+`shortURI(iri)` returns a prefixed spelling, or the unchanged absolute IRI when
+no prefix matches. It never returns a relative reference or applies namespace
+aliases. Aliases still apply when mapping predicates to object property names.
+
+`relativeURI(iri, baseURI)` returns a relative reference only when resolving it
+against the base reproduces the exact input IRI; otherwise it returns the
+absolute IRI. The base argument is optional: graph helpers default to
+`graph.baseURI`, initially the graph URL without its fragment. Context helpers
+use the optional `baseURI` context setting. Without a base, `relativeURI`
+retains the absolute IRI, and `fullURI` rejects relative inputs.
+
+For a graph whose base is `https://example.org/data/card`, with `foo` mapped to
+that same IRI:
+
+```js
+graph.fullURI('foo$/child') // 'https://example.org/data/card/child'
+graph.fullURI('card/child') // 'https://example.org/data/card/child'
+graph.fullURI('/child')     // 'https://example.org/child'
+graph.shortURI('https://example.org/data/card/child') // 'foo$/child'
+graph.relativeURI('https://example.org/data/card/child') // 'card/child'
+```
+
+An unknown `$` prefix throws; use `./price$tag` for a relative path that contains
+`$`. With `:` as the separator, an unknown `scheme:value` can still be a valid
+absolute IRI (for example `urn:example`). These API strings have no Turtle angle
+brackets or backslash escapes.
+
+Both Turtle writers prefer a valid prefixed name, then an exact relative
+reference, then an absolute IRI. They emit `@base` explicitly so relative output
+keeps its meaning when the document is moved. Turtle local-name escaping is
+handled by the writer: internal `foo$/child` becomes `foo:\/child`. N-Triples and
+N-Quads continue to use absolute IRIs; PATCH output keeps its absolute fallback.
+
+### Migrating from shorthand values
+
+Replace comparisons such as `many(subject.a).includes('foaf$Person')` with a
+comparison against `context.fullURI('foaf$Person')`. Compare literal datatypes
+against full IRIs too. Shape declarations can keep shorthand class/datatype
+inputs; `oldm-shape` resolves them against the subject's graph or context.
+
+Pass full datatype IRIs to standalone `literal()` calls. Existing serialized
+Turtle needs no migration. Application-owned JSON that contains shorthand class
+or datatype values must resolve those values with its recorded prefixes when
+loading. OLDM does not silently rewrite stored application documents.
 
 ## Multiple graphs in one context
 
@@ -112,6 +216,7 @@ Patch writers can support owned anonymous values conservatively: fresh blank nod
 - `NamedNode`
 - `BlankNode`
 - `Collection`
+- `literal(value, options)`
 - `one(values, whichOne)`
 - `many(values)`
 - `first(...values)`
