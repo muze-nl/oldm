@@ -1,6 +1,6 @@
 {
   "name": "@muze-nl/oldm-core",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Core Object - Linked Data Mapper, without parser or writer dependencies",
   "type": "module",
   "main": "src/oldm.mjs",

@@ -48,7 +48,7 @@
   ],
   "dependencies": {
     "@muze-nl/metro": "^0.8.0 || ^0.9.0",
-    "@muze-nl/oldm": "^0.7.1"
+    "@muze-nl/oldm": "^0.8.0"
   },
   "targets": {
     "default": {
