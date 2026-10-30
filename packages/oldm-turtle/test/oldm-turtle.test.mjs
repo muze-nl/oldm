@@ -39,12 +39,12 @@ tap.test('parses common Turtle 1.1 syntax used by small Solid documents', t => {
 	`)
 
 	t.equal(source.primary.id, url)
-	t.same([...source.primary.a].sort(), ['foaf$Person', 'schema$Person'])
+	t.same([...source.primary.a].sort(), ['http://schema.org/Person', 'http://xmlns.com/foaf/0.1/Person'])
 	t.same(source.primary.vcard$fn.map(value => String(value)), ['Auke', 'Auke C.'])
 	t.equal(String(source.primary.schema$name), 'Auke')
 	t.equal(source.primary.schema$name.language, 'nl')
 	t.equal(String(source.primary.vcard$bday), '1972-09-20')
-	t.equal(source.primary.vcard$bday.type, 'xsd$date')
+	t.equal(source.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(source.primary.vcard$hasEmail.vcard$value.id, 'mailto:auke@example.org')
 	t.equal(source.primary.foaf$knows.vcard$fn.toString(), 'Ben')
 	t.ok(source.primary.schema$knowsAbout instanceof Collection)
@@ -71,11 +71,11 @@ tap.test('parses comments, relative IRIs, blank node labels, booleans and number
 
 	t.equal(source.primary.schema$url.id, 'https://example.org/profile/')
 	t.equal(String(source.primary.schema$active), 'true')
-	t.equal(source.primary.schema$active.type, 'xsd$boolean')
+	t.equal(source.primary.schema$active.type, 'http://www.w3.org/2001/XMLSchema#boolean')
 	t.equal(String(source.primary.schema$answer), '42')
-	t.equal(source.primary.schema$answer.type, 'xsd$integer')
+	t.equal(source.primary.schema$answer.type, 'http://www.w3.org/2001/XMLSchema#integer')
 	t.equal(String(source.primary.schema$score), '12.5')
-	t.equal(source.primary.schema$score.type, 'xsd$decimal')
+	t.equal(source.primary.schema$score.type, 'http://www.w3.org/2001/XMLSchema#decimal')
 	t.equal(String(source.primary.schema$node.schema$name), 'Shared')
 
 	t.end()
@@ -107,7 +107,7 @@ tap.test('writes Turtle that OLDM can parse back with the same public shape', as
 	t.equal(String(roundtrip.primary.vcard$fn), 'Auke')
 	t.equal(roundtrip.primary.vcard$fn.language, 'nl')
 	t.equal(String(roundtrip.primary.vcard$bday), '1972-09-20')
-	t.equal(roundtrip.primary.vcard$bday.type, 'xsd$date')
+	t.equal(roundtrip.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(roundtrip.primary.foaf$knows.id, 'https://example.org/profile/card#him')
 	t.equal(String(roundtrip.primary.foaf$knows.vcard$fn), 'Ben')
 	t.same(roundtrip.primary.schema$knowsAbout.map(value => String(value)), ['web', 'solid'])
@@ -238,5 +238,25 @@ tap.test('throws useful syntax errors', t => {
 	t.throws(() => parse('@prefix : <#> . :me <broken '), SyntaxError)
 	t.throws(() => parse('@prefix : <#> . :me unknown:value "x" .'), /Unknown prefix/)
 
+	t.end()
+})
+
+
+tap.test('class and datatype IRIs survive writing without namespace rewriting', async t => {
+	const source = parse(`
+@prefix schema: <https://schema.org/>.
+<#me> a <http://schema.org/Person>;
+  <http://www.w3.org/2006/vcard/ns#bday> "1972-09-20"^^<http://schema.org/Date>.
+`)
+	const roundtrip = parse(await source.write())
+
+	t.equal(roundtrip.primary.a, 'http://schema.org/Person')
+	t.equal(roundtrip.primary.vcard$bday.type, 'http://schema.org/Date')
+
+	source.set(url, 'a', 'schema$Person')
+	const patch = await source.patch()
+	t.match(patch, /solid:deletes\s*\{[^}]*<http:\/\/schema.org\/Person>/)
+	t.match(patch, /solid:inserts\s*\{[^}]*schema:Person/)
+	t.notMatch(patch, /bday/)
 	t.end()
 })

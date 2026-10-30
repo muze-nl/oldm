@@ -76,10 +76,21 @@ metro-oldm is a thin integration layer between Metro and OLDM. That is a good Mu
 
 **Status:** Open
 
+### 4. Report parse and write failures explicitly
+
+**Principle:** Correct abstractions; failure is part of the interface.
+
+**Problem:** Parse errors were silently ignored. A successful response could therefore carry unparsed text in `data`, and callers had no signal that parsing failed. Writer failures surfaced as internal messages such as `source.prefixDeclarations is not a function`.
+
+**Decision:** A successful response with a Linked Data content type that cannot be parsed rejects the request. An unparseable error response keeps its body text in `data`, so its HTTP status stays the visible failure. Writer failures reject before the request is sent. Both errors keep the original error as `cause` and expose the request, and for parse errors the raw response. Metro's `jsonmw` follows the same contract.
+
+**Consequence accepted:** code that treats a response as raw content, such as a filesystem adapter reading a file, now receives a rejection for a malformed Linked Data file instead of its text. Such code must catch the error and read `error.response`, so broken files remain readable and repairable. jsfs-solid's `SolidAdapter.read` needs this handling.
+
+**Status:** Done (2026-09-27)
+
 ## Open questions
 
 - Should content negotiation defaults live here or in calling code?
-- Should failed parsing reject the response or return a response with parse metadata?
 - How much of OLDM should be exposed through this middleware?
 
 ## Non-goals

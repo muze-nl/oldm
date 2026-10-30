@@ -61,6 +61,13 @@ delete context.get(subject).vcard$nickname
 
 ## 2. Explicit value constructors
 
+### Status
+
+Partly implemented: `literal(value, { language, type })` is exported from Core
+and exposed as `oldm.literal()`. It creates literals without a graph, including
+URL-shaped text. `graph.setLanguage()` remains for compatibility. Named-node and
+collection constructors below remain proposals; deletion matching is separate.
+
 ### Problem
 
 OLDM currently has convenient heuristics for turning values into literals, named nodes, blank nodes, and collections. This is useful for beginners, but it can become ambiguous.

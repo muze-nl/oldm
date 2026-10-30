@@ -109,3 +109,85 @@ tap.test('POST leaves explicit non-linked-data content alone', async t => {
 	})
 	t.ok(res.ok)
 })
+
+tap.test('GET rejects a Linked Data response that cannot be parsed', async t => {
+	const client = metro.client().with(mockLinkedDataServer(t, {
+		body: '<#me> <https://schema.org/name> "unterminated .'
+	})).with(oldmmw())
+
+	const error = await client.get('https://example.test/people.ttl')
+		.then(() => null, error => error)
+
+	t.ok(error, 'the request rejects')
+	t.match(error.message, /could not parse text\/turtle response from https:\/\/example\.test\/people\.ttl/)
+	t.ok(error.cause, 'the parser error is the cause')
+	t.equal(error.response.status, 200)
+	t.equal(error.request.url, 'https://example.test/people.ttl')
+	t.match(await error.response.text(), /unterminated/)
+})
+
+tap.test('GET parses N-Triples responses', async t => {
+	const client = metro.client().with(async () => metro.response({
+		status: 200,
+		headers: {
+			'Content-Type': 'application/n-triples'
+		},
+		body: '<https://example.test/people#me> <https://schema.org/name> "Ada" .\n'
+	})).with(oldmmw())
+
+	const res = await client.get('https://example.test/people')
+	t.equal(res.data.constructor.name, 'Graph')
+	t.equal(res.data.subjects['https://example.test/people#me']['schema$name'].toString(), 'Ada')
+})
+
+tap.test('POST explains that the default writer needs an OLDM Graph', async t => {
+	const client = metro.client()
+		.with(async () => {
+			t.fail('the request must not be sent')
+			return metro.response({ status: 201 })
+		})
+		.with(oldmmw())
+
+	const error = await client.post('https://example.test/save.ttl', {
+		body: { name: 'Ada' }
+	}).then(() => null, error => error)
+
+	t.ok(error, 'the request rejects')
+	t.match(error.message, /could not write request data as text\/turtle for https:\/\/example\.test\/save\.ttl/)
+	t.match(error.message, /expects an OLDM Graph/)
+	t.ok(error.cause)
+	t.equal(error.request.url, 'https://example.test/save.ttl')
+})
+
+tap.test('POST reports custom writer failures without the default-writer hint', async t => {
+	const failure = new Error('writer failed')
+	const client = metro.client()
+		.with(async () => metro.response({ status: 201 }))
+		.with(oldmmw({
+			writer: async () => {
+				throw failure
+			}
+		}))
+
+	const error = await client.post('https://example.test/save.ttl', {
+		body: { name: 'Ada' }
+	}).then(() => null, error => error)
+
+	t.equal(error.cause, failure)
+	t.notMatch(error.message, /OLDM Graph/)
+})
+
+tap.test('GET keeps an unparseable error response as text', async t => {
+	const client = metro.client().with(async () => metro.response({
+		status: 500,
+		statusText: 'Internal Server Error',
+		headers: {
+			'Content-Type': 'text/turtle'
+		},
+		body: 'Something went wrong'
+	})).with(oldmmw())
+
+	const res = await client.get('https://example.test/people.ttl')
+	t.equal(res.status, 500)
+	t.equal(res.data, 'Something went wrong')
+})

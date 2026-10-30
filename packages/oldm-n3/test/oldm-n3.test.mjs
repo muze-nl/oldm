@@ -1,5 +1,5 @@
 import tap from 'tap'
-import oldm, {Collection, many, one} from '@muze-nl/oldm-core'
+import oldm, {Collection, literal, many, one} from '@muze-nl/oldm-core'
 import {n3Parser, n3PatchWriter, n3Writer} from '@muze-nl/oldm-n3'
 
 const url = 'https://example.org/profile/card#me'
@@ -36,7 +36,7 @@ tap.test('n3Parser parses Turtle into OLDM public object shape', t => {
 `)
 
 	t.equal(String(source.primary.vcard$fn), 'Auke van Slooten')
-	t.same([...source.primary.a].sort(), ['foaf$Person', 'schema$Person'])
+	t.same([...source.primary.a].sort(), ['http://schema.org/Person', 'http://xmlns.com/foaf/0.1/Person'])
 	t.equal(source.primary.foaf$knows.id, 'https://example.org/profile/card#him')
 	t.equal(String(source.primary.foaf$knows.vcard$fn), 'Ben Peachey')
 	t.equal(source.primary.foaf$knows.foaf$knows, source.primary)
@@ -59,12 +59,51 @@ tap.test('n3Parser preserves xsd datatypes, language tags and collections', t =>
 `)
 
 	t.equal(String(source.primary.vcard$bday), '1972-09-20')
-	t.equal(source.primary.vcard$bday.type, 'xsd$date')
+	t.equal(source.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(String(source.primary.vcard$fn), 'Auke')
 	t.equal(source.primary.vcard$fn.language, 'nl')
 	t.ok(source.primary.schema$knowsAbout instanceof Collection)
 	t.same(source.primary.schema$knowsAbout.map(value => String(value)), ['web', 'solid'])
 
+	t.end()
+})
+
+tap.test('n3Writer writes a fragment subject relative to the resource URL', async t => {
+	const source = parse('<#me> <https://schema.org/name> "Auke".')
+	const output = await source.write()
+	const roundtripped = parse(output)
+
+	t.match(output, /<#me> schema:name "Auke"\./)
+	t.same(Object.keys(roundtripped.subjects), [url])
+	t.equal(String(roundtripped.get(url)?.schema$name), 'Auke')
+	t.end()
+})
+
+tap.test('n3Writer uses an empty prefix for a fragment subject when declared', async t => {
+	const source = parse(`
+@prefix : <#>.
+:me <https://schema.org/name> "Auke".
+`)
+	const output = await source.write()
+	const roundtripped = parse(output)
+
+	t.match(output, /^:me schema:name "Auke"\./m)
+	t.same(Object.keys(roundtripped.subjects), [url])
+	t.equal(String(roundtripped.get(url)?.schema$name), 'Auke')
+	t.end()
+})
+
+tap.test('n3Writer preserves an unchanged language-tagged literal', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+:me vcard:fn "Hallo"@nl.
+`)
+	const output = await source.write()
+	const roundtripped = parse(output)
+
+	t.equal(String(roundtripped.primary.vcard$fn), 'Hallo')
+	t.equal(roundtripped.primary.vcard$fn.language, 'nl')
 	t.end()
 })
 
@@ -88,7 +127,7 @@ tap.test('n3Writer serializes changed data that can be parsed back', async t => 
 	vcard:fn "Ben".
 `)
 
-	source.primary.vcard$fn = source.setLanguage('Auke Cornelis van Slooten', 'nl')
+	source.primary.vcard$fn = literal('Auke Cornelis van Slooten', {language: 'nl'})
 	source.primary.vcard$nickname = ['Poef', 'Auke']
 
 	const output = await source.write()
@@ -97,7 +136,7 @@ tap.test('n3Writer serializes changed data that can be parsed back', async t => 
 	t.equal(String(roundtripped.primary.vcard$fn), 'Auke Cornelis van Slooten')
 	t.equal(roundtripped.primary.vcard$fn.language, 'nl')
 	t.equal(String(roundtripped.primary.vcard$bday), '1972-09-20')
-	t.equal(roundtripped.primary.vcard$bday.type, 'xsd$date')
+	t.equal(roundtripped.primary.vcard$bday.type, 'http://www.w3.org/2001/XMLSchema#date')
 	t.equal(roundtripped.primary.foaf$knows.id, 'https://example.org/profile/card#him')
 	t.equal(String(roundtripped.primary.foaf$knows.vcard$fn), 'Ben')
 	t.same(many(roundtripped.primary.vcard$nickname).map(value => String(value)).sort(), ['Auke', 'Poef'])
@@ -150,6 +189,56 @@ tap.test('n3Writer serializes blank nodes as object values', async t => {
 
 	t.equal(email.vcard$value.id, 'mailto:auke@example.org')
 
+	t.end()
+})
+
+tap.test('n3Writer preserves the type of a blank node', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.
+:me vcard:hasEmail [
+	a vcard:Email;
+	vcard:value <mailto:auke@example.org>
+].
+`)
+	const roundtripped = parse(await source.write())
+	const email = roundtripped.primary.vcard$hasEmail
+
+	t.equal(email.a, 'http://www.w3.org/2006/vcard/ns#Email')
+	t.equal(email.vcard$value.id, 'mailto:auke@example.org')
+	t.end()
+})
+
+tap.test('n3Writer preserves shared blank-node identity', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <https://schema.org/>.
+:me schema:homeLocation _:place;
+	schema:workLocation _:place.
+_:place schema:name "Amsterdam".
+`)
+	t.equal(source.primary.schema$homeLocation, source.primary.schema$workLocation)
+	const roundtripped = parse(await source.write())
+	const person = roundtripped.primary
+
+	t.equal(person.schema$homeLocation, person.schema$workLocation)
+	t.equal(String(person.schema$homeLocation.schema$name), 'Amsterdam')
+	t.end()
+})
+
+tap.test('n3Writer preserves a blank node referring to itself', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <https://schema.org/>.
+:me schema:homeLocation _:place.
+_:place schema:name "Amsterdam";
+	schema:containedInPlace _:place.
+`)
+	const roundtripped = parse(await source.write())
+	const place = roundtripped.primary.schema$homeLocation
+
+	t.equal(place.schema$containedInPlace, place)
+	t.equal(String(place.schema$name), 'Amsterdam')
 	t.end()
 })
 
@@ -211,6 +300,28 @@ tap.test('n3PatchWriter replaces an owned blank-node value as a Solid N3 Patch',
 	t.end()
 })
 
+tap.test('n3PatchWriter keeps independent blank-node changes distinct', async t => {
+	const source = parse(`
+@prefix : <#>.
+@prefix schema: <https://schema.org/>.
+:me schema:homeLocation [schema:name "Amsterdam"];
+	schema:workLocation [schema:name "Utrecht"].
+`)
+	source.set(source.primary.schema$homeLocation, 'schema$name', 'Rotterdam')
+	source.set(source.primary.schema$workLocation, 'schema$name', 'Leiden')
+	const patch = await source.patch()
+	const references = Array.from(
+		patch.matchAll(/schema:(?:homeLocation|workLocation) (\S+) \./g),
+		match => match[1]
+	)
+	const oldNodes = new Set(references.filter(id => id.startsWith('?')))
+	const newNodes = new Set(references.filter(id => id.startsWith('_:')))
+
+	t.equal(oldNodes.size, 2, 'the original nodes have distinct variables')
+	t.equal(newNodes.size, 2, 'the replacement nodes have distinct identifiers')
+	t.end()
+})
+
 tap.test('n3PatchWriter replaces an RDF collection as a whole anonymous value', async t => {
 	const source = parse(`
 @prefix : <#>.
@@ -252,5 +363,25 @@ _:shared schema:name "Amsterdam".
 
 	await t.rejects(source.patch(), /shared anonymous value/)
 
+	t.end()
+})
+
+
+tap.test('class and datatype IRIs survive writing without namespace rewriting', async t => {
+	const source = parse(`
+@prefix schema: <https://schema.org/>.
+<#me> a <http://schema.org/Person>;
+  <http://www.w3.org/2006/vcard/ns#bday> "1972-09-20"^^<http://schema.org/Date>.
+`)
+	const roundtrip = parse(await source.write())
+
+	t.equal(roundtrip.primary.a, 'http://schema.org/Person')
+	t.equal(roundtrip.primary.vcard$bday.type, 'http://schema.org/Date')
+
+	source.set(url, 'a', 'schema$Person')
+	const patch = await source.patch()
+	t.match(patch, /solid:deletes\s*\{[^}]*<http:\/\/schema.org\/Person>/)
+	t.match(patch, /solid:inserts\s*\{[^}]*schema:Person/)
+	t.notMatch(patch, /bday/)
 	t.end()
 })
