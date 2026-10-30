@@ -257,7 +257,8 @@ class TurtleParser {
 
 	parseNumericLiteral() {
 		const rest = this.#input.slice(this.#position)
-		const match = rest.match(/^[+-]?(?:(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+|[0-9]+)/)
+		// Match doubles first: 1.e2 is valid, but 1. ends an integer statement.
+		const match = rest.match(/^[+-]?(?:(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+|[0-9]*\.[0-9]+|[0-9]+)/)
 		if (!match) {
 			this.error('Expected object')
 		}
