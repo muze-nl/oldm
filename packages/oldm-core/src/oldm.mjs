@@ -1,4 +1,4 @@
-import {absoluteIRI, expandIRI, shortenIRI, relativeIRI, resolveIRIReference} from './iri.mjs'
+import {absoluteIRI, expandIRI, shortenIRI, relativeIRI, resolveNamespaceReference} from './iri.mjs'
 
 // Stop as soon as a matching namespace is found; avoid materializing all
 // context prefixes for every property in a combined graph view.
@@ -278,7 +278,7 @@ export class Context {
 		if (prefixes) {
 			for (let prefix in prefixes) {
 				let prefixURL = prefixes[prefix]
-				prefixURL = resolveIRIReference(prefixURL, url)
+				prefixURL = resolveNamespaceReference(prefixURL, url)
 
 				if (!this.prefixes[prefix]) {
 					this.prefixes[prefix] = prefixURL

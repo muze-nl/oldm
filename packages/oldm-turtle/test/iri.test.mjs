@@ -56,3 +56,25 @@ tap.test('IRIs survive serialization across prefixes, queries, fragments and Uni
 	}
 	t.end()
 })
+
+tap.test('scheme-only namespaces survive parsing, lookup and serialization', async t => {
+	const input = `@prefix n1: <http://> .
+	@prefix n2: <https://> .
+	@prefix local: <#> .
+	local:me <https://schema.org/url> n1:localhost, n2:localhost .`
+	const owner = context()
+	const source = owner.parse(input, base, 'text/turtle')
+	t.equal(owner.fullURI('n1$localhost'), 'http://localhost')
+	t.equal(source.shortURI('https://localhost'), 'n2$localhost')
+	t.equal(source.prefixes.local, base+'#', 'relative namespaces still resolve')
+	t.same(source.get(base+'#me')[source.propertyName('https://schema.org/url')].map(node => node.id).sort(), ['http://localhost', 'https://localhost'])
+	const output = await source.write()
+	t.match(output, '@prefix n1: <http://>')
+	t.match(output, '@prefix n2: <https://>')
+	const ids = text => n3Parser(text, base, 'text/turtle').quads
+		.map(q => [q.subject.id, q.predicate.id, q.object.id]).sort()
+	t.same(ids(output), ids(input))
+	const restored = context().parse(output, base, 'text/turtle')
+	t.same(restored.get(base+'#me')[restored.propertyName('https://schema.org/url')].map(node => node.id).sort(), ['http://localhost', 'https://localhost'])
+	t.end()
+})

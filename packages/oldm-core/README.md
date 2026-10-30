@@ -92,7 +92,10 @@ without changing the represented value.
 
 `fullURI(value)` always returns a valid absolute IRI or throws `TypeError`.
 It expands a known prefix by exact string concatenation, preserving the entire
-suffix, including an empty suffix. Relative references use RFC 3986 base
+suffix, including an empty suffix when it produces a complete identifier.
+Namespaces such as `http://` and `https://` are accepted as prefixes: `web$localhost`
+with `web: "http://"` expands to `http://localhost`. Complete HTTP identifiers
+still require a host. Relative references use RFC 3986 base
 resolution. Absolute inputs are validated without normalization: case, Unicode,
 percent escapes, and namespace identity are preserved.
 

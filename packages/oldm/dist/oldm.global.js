@@ -1937,7 +1937,7 @@
   var fragmentPattern = component(":@/?");
   var userPattern = component(":");
   var hostPattern = component("");
-  function parts(value, requireAbsolute = false) {
+  function parts(value, requireAbsolute = false, requireHTTPHost = true) {
     if (typeof value != "string")
       throw new TypeError("Expected an IRI string");
     if (/[\u0000-\u0020\u007F-\u009F]/.test(value))
@@ -1967,9 +1967,9 @@
         }
       } else if (!hostPattern.test(match2[1]))
         throw new TypeError(`Invalid IRI host: ${value}`);
-      if (/^https?$/i.test(scheme) && !match2[1])
+      if (requireHTTPHost && /^https?$/i.test(scheme) && !match2[1])
         throw new TypeError(`Missing HTTP host: ${value}`);
-    } else if (/^https?$/i.test(scheme))
+    } else if (requireHTTPHost && /^https?$/i.test(scheme))
       throw new TypeError(`Missing HTTP authority: ${value}`);
     return { scheme, authority, path, query, fragment };
   }
@@ -2013,9 +2013,19 @@
     }
     return output;
   }
+  function namespaceIRI(value) {
+    parts(value, true, false);
+    return value;
+  }
+  function resolveNamespaceReference(value, base) {
+    return resolveReference(value, base, namespaceIRI);
+  }
   function resolveIRIReference(value, base) {
+    return resolveReference(value, base, absoluteIRI);
+  }
+  function resolveReference(value, base, validate) {
     if (typeof value == "string" && /^[a-z][a-z0-9+.-]*:/i.test(value))
-      return absoluteIRI(value);
+      return validate(value);
     const ref = parts(value);
     if (base == null)
       throw new TypeError(`Cannot resolve a relative IRI without a base: ${value}`);
@@ -2035,7 +2045,7 @@
       target.query = ref.query;
     }
     target.fragment = ref.fragment;
-    return absoluteIRI(join(target));
+    return validate(join(target));
   }
   function expandIRI(value, namespaceFor, separator, base) {
     value = value?.id ?? value;
@@ -2046,7 +2056,7 @@
       const prefix = value.slice(0, index);
       const namespace = namespaceFor(prefix);
       if (namespace !== void 0)
-        return absoluteIRI(absoluteIRI(namespace) + value.slice(index + separator.length));
+        return absoluteIRI(namespaceIRI(namespace) + value.slice(index + separator.length));
       if (separator != ":" && !/[:/?#]/.test(prefix))
         throw new TypeError(`Unknown prefix: ${prefix}`);
     }
@@ -2057,7 +2067,7 @@
     for (const [prefix, iri] of entries) {
       const namespace = canonicalize(iri);
       if (value.startsWith(namespace)) {
-        absoluteIRI(iri);
+        namespaceIRI(iri);
         return prefix + separator + value.slice(namespace.length);
       }
     }
@@ -2356,7 +2366,7 @@
       if (prefixes2) {
         for (let prefix in prefixes2) {
           let prefixURL = prefixes2[prefix];
-          prefixURL = resolveIRIReference(prefixURL, url);
+          prefixURL = resolveNamespaceReference(prefixURL, url);
           if (!this.prefixes[prefix]) {
             this.prefixes[prefix] = prefixURL;
             this.prefixOrder.push(prefix);

@@ -1,4 +1,4 @@
-import {absoluteIRI, resolveIRIReference, turtlePrefixedIRI} from '@muze-nl/oldm-core/iri'
+import {absoluteIRI, resolveIRIReference, resolveNamespaceReference, turtlePrefixedIRI} from '@muze-nl/oldm-core/iri'
 import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 
 const RDF_FIRST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'
@@ -80,7 +80,7 @@ class TurtleParser {
 			const prefix = this.readPrefixLabel()
 			this.skip()
 			const iri = this.readIRIReference()
-			this.#prefixes[prefix] = this.resolveIRI(iri)
+			this.#prefixes[prefix] = resolveNamespaceReference(iri, this.#base)
 			this.skip()
 			if (this.peek() == '.') {
 				this.#position++

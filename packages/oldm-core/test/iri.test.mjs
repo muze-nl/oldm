@@ -111,3 +111,16 @@ tap.test('empty prefix suffixes remain references in graph writes', t => {
 	t.equal(subject.id, base+'#me')
 	t.end()
 })
+
+tap.test('prefix namespaces can supply the scheme while the local name supplies the host', t => {
+	const context = oldm({prefixes: {http: 'http://', https: 'https://'}})
+	const graph = new Graph([], base, 'text/turtle', {}, context)
+	for (const owner of [context, graph]) {
+		for (const scheme of ['http', 'https']) {
+			t.equal(owner.fullURI(scheme+'$localhost'), scheme+'://localhost')
+			t.equal(owner.shortURI(scheme+'://localhost'), scheme+'$localhost')
+			t.throws(() => owner.fullURI(scheme+'$'), TypeError, 'expanded HTTP term still requires a host')
+		}
+	}
+	t.end()
+})
