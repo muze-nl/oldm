@@ -21,7 +21,10 @@ const api = client('https://pod.example/')
 
 Adds Linked Data parsing and writing to a Metro client. Responses with Linked Data content types are parsed into OLDM data and stored on `response.data`. Request bodies that can be serialized by OLDM are converted before they are sent.
 
-Common option: `prefixes`, passed through to OLDM.
+Options such as `prefixes`, `parser`, `writer` and `patchWriter` are passed through
+to `oldm.context(options)`. Without explicit adapters, the selected OLDM factory
+supplies its defaults. The shared OLDM package still defaults to N3. A supplied
+`context` is used directly. Middleware does not select an adapter by name.
 
 See the OLDM package documentation for the data model and prefix behaviour.
 

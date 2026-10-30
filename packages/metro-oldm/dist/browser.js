@@ -1837,7 +1837,7 @@
   var fragmentPattern = component(":@/?");
   var userPattern = component(":");
   var hostPattern = component("");
-  function parts(value, requireAbsolute = false) {
+  function parts(value, requireAbsolute = false, requireHTTPHost = true) {
     if (typeof value != "string") throw new TypeError("Expected an IRI string");
     if (/[\u0000-\u0020\u007F-\u009F]/.test(value)) throw new TypeError(`Invalid IRI: ${value}`);
     const match = /^(?:([a-z][a-z0-9+.-]*):)?(?:\/\/([^/?#]*))?([^?#]*)(\?[^#]*)?(#.*)?$/is.exec(value);
@@ -1861,8 +1861,8 @@
           }
         }
       } else if (!hostPattern.test(match2[1])) throw new TypeError(`Invalid IRI host: ${value}`);
-      if (/^https?$/i.test(scheme) && !match2[1]) throw new TypeError(`Missing HTTP host: ${value}`);
-    } else if (/^https?$/i.test(scheme)) throw new TypeError(`Missing HTTP authority: ${value}`);
+      if (requireHTTPHost && /^https?$/i.test(scheme) && !match2[1]) throw new TypeError(`Missing HTTP host: ${value}`);
+    } else if (requireHTTPHost && /^https?$/i.test(scheme)) throw new TypeError(`Missing HTTP authority: ${value}`);
     return { scheme, authority, path, query, fragment };
   }
   var validatedIRIs = /* @__PURE__ */ new Set();
@@ -1900,8 +1900,18 @@
     }
     return output;
   }
+  function namespaceIRI(value) {
+    parts(value, true, false);
+    return value;
+  }
+  function resolveNamespaceReference(value, base) {
+    return resolveReference(value, base, namespaceIRI);
+  }
   function resolveIRIReference(value, base) {
-    if (typeof value == "string" && /^[a-z][a-z0-9+.-]*:/i.test(value)) return absoluteIRI(value);
+    return resolveReference(value, base, absoluteIRI);
+  }
+  function resolveReference(value, base, validate) {
+    if (typeof value == "string" && /^[a-z][a-z0-9+.-]*:/i.test(value)) return validate(value);
     const ref = parts(value);
     if (base == null) throw new TypeError(`Cannot resolve a relative IRI without a base: ${value}`);
     const target = parts(base, true);
@@ -1920,7 +1930,7 @@
       target.query = ref.query;
     }
     target.fragment = ref.fragment;
-    return absoluteIRI(join(target));
+    return validate(join(target));
   }
   function expandIRI(value, namespaceFor, separator, base) {
     value = value?.id ?? value;
@@ -1929,7 +1939,7 @@
     if (index >= 0) {
       const prefix = value.slice(0, index);
       const namespace = namespaceFor(prefix);
-      if (namespace !== void 0) return absoluteIRI(absoluteIRI(namespace) + value.slice(index + separator.length));
+      if (namespace !== void 0) return absoluteIRI(namespaceIRI(namespace) + value.slice(index + separator.length));
       if (separator != ":" && !/[:/?#]/.test(prefix)) throw new TypeError(`Unknown prefix: ${prefix}`);
     }
     return resolveIRIReference(value, base);
@@ -1939,7 +1949,7 @@
     for (const [prefix, iri] of entries) {
       const namespace = canonicalize(iri);
       if (value.startsWith(namespace)) {
-        absoluteIRI(iri);
+        namespaceIRI(iri);
         return prefix + separator + value.slice(namespace.length);
       }
     }
@@ -2131,7 +2141,7 @@
       return left.length == right.length && left.every((item, index) => sameValue(item, right[index]));
     }
     if (isLiteral(left) && isLiteral(right)) {
-      return String(left) == String(right) && left?.type == right?.type && left?.language == right?.language;
+      return String(left) == String(right) && left?.type == right?.type && (left?.language ?? "") == (right?.language ?? "");
     }
     return false;
   }
@@ -2227,7 +2237,7 @@
       if (prefixes2) {
         for (let prefix in prefixes2) {
           let prefixURL = prefixes2[prefix];
-          prefixURL = resolveIRIReference(prefixURL, url);
+          prefixURL = resolveNamespaceReference(prefixURL, url);
           if (!this.prefixes[prefix]) {
             this.prefixes[prefix] = prefixURL;
             this.prefixOrder.push(prefix);
@@ -5114,14 +5124,25 @@
   };
   var ResourceWriter = class extends N3Writer {
     constructor(source, options) {
-      super(options);
+      super({ ...options, prefixes: {} });
+      this.usedPrefixes = /* @__PURE__ */ new Set();
+      this.relative = options.relative ?? true;
       this.source = source;
       this.entries = Object.entries(options.prefixes);
     }
     _encodeIriOrBlank(term) {
       if (term.termType != "NamedNode" || this._lineMode) return super._encodeIriOrBlank(term);
       const iri = absoluteIRI(term.value);
-      return turtlePrefixedIRI(iri, this.entries) ?? `<${this.source.relativeURI(iri)}>`;
+      const prefixed = turtlePrefixedIRI(iri, this.entries);
+      if (prefixed !== null) {
+        this.usedPrefixes.add(prefixed.slice(0, prefixed.indexOf(":")));
+        return prefixed;
+      }
+      return `<${this.relative ? this.source.relativeURI(iri) : iri}>`;
+    }
+    declarations() {
+      return this.entries.filter(([prefix]) => this.usedPrefixes.has(prefix)).map(([prefix, iri]) => `@prefix ${prefix}: <${iri}> .
+`).join("");
     }
   };
   var n3Writer = (source) => {
@@ -5258,9 +5279,9 @@
         writeProperties(namedNode2(id), subject);
       });
       writer.end((error, result) => {
-        if (result) {
+        if (!error) {
           resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .
-` + result);
+` + writer.declarations() + result);
         } else {
           reject(error);
         }
@@ -5539,17 +5560,12 @@
       prefixes2.rdf ??= rdfNamespace;
     }
     prefixes2.solid = solidNamespace;
-    const writer = new N3Writer({
+    const writer = new ResourceWriter(source, {
       format: "text/turtle",
-      prefixes: prefixes2
+      prefixes: prefixes2,
+      relative: false
     });
-    const lines = [];
-    for (const [prefix, iri] of Object.entries(prefixes2)) {
-      lines.push(`@prefix ${prefix}: <${iri}> .`);
-    }
-    if (lines.length) {
-      lines.push("");
-    }
+    writer.usedPrefixes.add("solid");
     const predicates = [];
     if (where.length) {
       predicates.push(`solid:where ${formula(writer, where)}`);
@@ -5564,8 +5580,9 @@
     if (predicates.length) {
       patch += ";\n	" + predicates.join(";\n	");
     }
-    lines.push(`${patch} .`);
-    return lines.join("\n") + "\n";
+    return writer.declarations() + `
+${patch} .
+`;
   }
   function quadsUseNamespace(quads, namespace) {
     return quads.some(
@@ -5611,9 +5628,7 @@
   // src/oldmmw.mjs
   function oldmmw(options) {
     options = Object.assign({
-      contentType: "text/turtle",
-      parser: src_default.n3Parser,
-      writer: src_default.n3Writer
+      contentType: "text/turtle"
     }, options);
     const context = options.context ?? src_default.context(options);
     async function oldmmw2(req, next) {
@@ -5654,7 +5669,7 @@
         return await context.writer(req.data);
       } catch (error) {
         let message = "oldmmw: could not write request data as " + req.headers.get("Content-Type") + " for " + req.url;
-        if (context.writer === src_default.n3Writer) {
+        if (context.writer === src_default.context().writer) {
           message += "; the default writer expects an OLDM Graph";
         }
         throw linkedDataError(message, error, req);

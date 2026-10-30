@@ -3,9 +3,7 @@ import oldm from '@muze-nl/oldm'
 export default function oldmmw(options)
 {
 	options = Object.assign({
-		contentType: 'text/turtle',
-		parser: oldm.n3Parser,
-		writer: oldm.n3Writer
+		contentType: 'text/turtle'
 	}, options)
 
 	const context = options.context ?? oldm.context(options)
@@ -53,7 +51,7 @@ export default function oldmmw(options)
 		catch(error) {
 			let message = 'oldmmw: could not write request data as '
 				+ req.headers.get('Content-Type') + ' for ' + req.url
-			if (context.writer === oldm.n3Writer) {
+			if (context.writer === oldm.context().writer) {
 				message += '; the default writer expects an OLDM Graph'
 			}
 			throw linkedDataError(message, error, req)

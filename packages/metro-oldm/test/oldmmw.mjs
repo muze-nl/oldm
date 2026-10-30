@@ -191,3 +191,23 @@ tap.test('GET keeps an unparseable error response as text', async t => {
 	t.equal(res.status, 500)
 	t.equal(res.data, 'Something went wrong')
 })
+
+tap.test('middleware respects the selected context factory defaults', async t => {
+	const createContext = oldm.context
+	const original = createContext()
+	let parses = 0
+	const parser = (...args) => {
+		parses++
+		return original.parser(...args)
+	}
+	const writer = source => original.writer(source)
+	t.teardown(() => { oldm.context = createContext })
+	oldm.context = (options = {}) => createContext({ parser, writer, ...options })
+	const linkedData = oldmmw()
+	t.equal(linkedData.context.parser, parser)
+	t.equal(linkedData.context.writer, writer)
+	const client = metro.client().with(mockLinkedDataServer(t)).with(linkedData)
+	const response = await client.get('https://example.test/people.ttl')
+	t.equal(parses, 1)
+	t.equal(String(response.data.get('https://example.test/people.ttl#me').schema$name), 'Ada')
+})
