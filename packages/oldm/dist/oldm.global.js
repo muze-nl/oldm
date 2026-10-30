@@ -2270,7 +2270,7 @@
       return left.length == right.length && left.every((item, index) => sameValue(item, right[index]));
     }
     if (isLiteral(left) && isLiteral(right)) {
-      return String(left) == String(right) && left?.type == right?.type && left?.language == right?.language;
+      return String(left) == String(right) && left?.type == right?.type && (left?.language ?? "") == (right?.language ?? "");
     }
     return false;
   }
@@ -5219,7 +5219,9 @@
   };
   var ResourceWriter = class extends N3Writer {
     constructor(source, options) {
-      super(options);
+      super({ ...options, prefixes: {} });
+      this.usedPrefixes = /* @__PURE__ */ new Set();
+      this.relative = options.relative ?? true;
       this.source = source;
       this.entries = Object.entries(options.prefixes);
     }
@@ -5227,7 +5229,16 @@
       if (term.termType != "NamedNode" || this._lineMode)
         return super._encodeIriOrBlank(term);
       const iri = absoluteIRI(term.value);
-      return turtlePrefixedIRI(iri, this.entries) ?? `<${this.source.relativeURI(iri)}>`;
+      const prefixed = turtlePrefixedIRI(iri, this.entries);
+      if (prefixed !== null) {
+        this.usedPrefixes.add(prefixed.slice(0, prefixed.indexOf(":")));
+        return prefixed;
+      }
+      return `<${this.relative ? this.source.relativeURI(iri) : iri}>`;
+    }
+    declarations() {
+      return this.entries.filter(([prefix]) => this.usedPrefixes.has(prefix)).map(([prefix, iri]) => `@prefix ${prefix}: <${iri}> .
+`).join("");
     }
   };
   var n3Writer = (source) => {
@@ -5364,9 +5375,9 @@
         writeProperties(namedNode2(id), subject);
       });
       writer.end((error, result) => {
-        if (result) {
+        if (!error) {
           resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .
-` + result);
+` + writer.declarations() + result);
         } else {
           reject(error);
         }
@@ -5645,17 +5656,12 @@
       prefixes2.rdf ??= rdfNamespace;
     }
     prefixes2.solid = solidNamespace;
-    const writer = new N3Writer({
+    const writer = new ResourceWriter(source, {
       format: "text/turtle",
-      prefixes: prefixes2
+      prefixes: prefixes2,
+      relative: false
     });
-    const lines = [];
-    for (const [prefix, iri] of Object.entries(prefixes2)) {
-      lines.push(`@prefix ${prefix}: <${iri}> .`);
-    }
-    if (lines.length) {
-      lines.push("");
-    }
+    writer.usedPrefixes.add("solid");
     const predicates = [];
     if (where.length) {
       predicates.push(`solid:where ${formula(writer, where)}`);
@@ -5670,8 +5676,9 @@
     if (predicates.length) {
       patch += ";\n	" + predicates.join(";\n	");
     }
-    lines.push(`${patch} .`);
-    return lines.join("\n") + "\n";
+    return writer.declarations() + `
+${patch} .
+`;
   }
   function quadsUseNamespace(quads, namespace) {
     return quads.some(

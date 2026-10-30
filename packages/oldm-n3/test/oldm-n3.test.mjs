@@ -385,3 +385,40 @@ tap.test('class and datatype IRIs survive writing without namespace rewriting', 
 	t.notMatch(patch, /bday/)
 	t.end()
 })
+
+tap.test('writer declares only prefixes used in serialized RDF, not literal text', async t => {
+  const source = parse(`
+    @prefix unused: <https://unused.example/> .
+    @prefix also: <https://schema.org/> .
+    @prefix schema: <https://schema.org/> .
+    @prefix custom: <https://datatype.example/> .
+    <#me> schema:name "unused:looksLikeAPrefix" ;
+      schema:knowsAbout ( [ schema:value "x"^^custom:special ] ) .
+  `)
+  const before = source.prefixDeclarations()
+  const output = await source.write()
+  const declarations = [...output.matchAll(/^@prefix ([^:]*):/gm)].map(match => match[1]).sort()
+  t.same(declarations, ['also', 'custom'])
+  t.same(source.prefixDeclarations(), before, 'writing does not prune the editing context')
+  const restored = parse(output)
+  t.equal(String(restored.get(url)[restored.propertyName('https://schema.org/name')]), 'unused:looksLikeAPrefix')
+  source.set(url, 'unused$nowUsed', 'yes')
+  t.match(await source.write(), '@prefix unused:')
+})
+
+tap.test('empty graphs have no prefix declarations', async t => {
+  t.notMatch(await parse('').write(), /@prefix/)
+})
+
+tap.test('patch declarations cover only its changed triples and patch vocabulary', async t => {
+  const source = parse(`
+    @prefix unused: <https://unused.example/> .
+    <#me> <https://schema.org/name> "Before" .
+  `)
+  source.set(url, 'schema$name', 'After')
+  const patch = await source.patch()
+  const declarations = [...patch.matchAll(/^@prefix ([^:]*):/gm)].map(match => match[1]).sort()
+  t.same(declarations, ['schema', 'solid'])
+  t.match(patch, '"Before"')
+  t.match(patch, '"After"')
+})

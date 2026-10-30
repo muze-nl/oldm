@@ -155,7 +155,7 @@ function sameValue(left, right)
 	if (isLiteral(left) && isLiteral(right)) {
 		return String(left) == String(right)
 			&& left?.type == right?.type
-			&& left?.language == right?.language
+			&& (left?.language ?? '') == (right?.language ?? '')
 	}
 	return false
 }

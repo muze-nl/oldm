@@ -22,7 +22,9 @@ export const n3Parser = (input, uri, type) => {
 // encoder so prefix selection and exact relative round trips match the small writer.
 class ResourceWriter extends Writer {
 	constructor(source, options) {
-		super(options)
+		super({...options, prefixes: {}})
+		this.usedPrefixes = new Set()
+		this.relative = options.relative ?? true
 		this.source = source
 		this.entries = Object.entries(options.prefixes)
 	}
@@ -30,7 +32,17 @@ class ResourceWriter extends Writer {
 	_encodeIriOrBlank(term) {
 		if (term.termType != 'NamedNode' || this._lineMode) return super._encodeIriOrBlank(term)
 		const iri = absoluteIRI(term.value)
-		return turtlePrefixedIRI(iri, this.entries) ?? `<${this.source.relativeURI(iri)}>`
+		const prefixed = turtlePrefixedIRI(iri, this.entries)
+		if (prefixed !== null) {
+			this.usedPrefixes.add(prefixed.slice(0, prefixed.indexOf(':')))
+			return prefixed
+		}
+		return `<${this.relative ? this.source.relativeURI(iri) : iri}>`
+	}
+
+	declarations() {
+		return this.entries.filter(([prefix]) => this.usedPrefixes.has(prefix))
+			.map(([prefix, iri]) => `@prefix ${prefix}: <${iri}> .\n`).join('')
 	}
 }
 
@@ -202,8 +214,8 @@ export const n3Writer = (source) => {
 		})
 
 		writer.end((error, result) => {
-			if (result) {
-				resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .\n`+result)
+			if (!error) {
+				resolve(writer._lineMode ? result : `@base <${absoluteIRI(source.baseURI)}> .\n`+writer.declarations()+result)
 			} else {
 				reject(error)
 			}
@@ -532,17 +544,10 @@ function serializePatch(source, inserts, deletes, where=[])
 		prefixes.rdf ??= rdfNamespace
 	}
 	prefixes.solid = solidNamespace
-	const writer = new Writer({
-		format: 'text/turtle',
-		prefixes
+	const writer = new ResourceWriter(source, {
+		format: 'text/turtle', prefixes, relative: false
 	})
-	const lines = []
-	for (const [prefix, iri] of Object.entries(prefixes)) {
-		lines.push(`@prefix ${prefix}: <${iri}> .`)
-	}
-	if (lines.length) {
-		lines.push('')
-	}
+	writer.usedPrefixes.add('solid')
 
 	const predicates = []
 	if (where.length) {
@@ -559,9 +564,7 @@ function serializePatch(source, inserts, deletes, where=[])
 	if (predicates.length) {
 		patch += ';\n\t' + predicates.join(';\n\t')
 	}
-	lines.push(`${patch} .`)
-
-	return lines.join('\n')+"\n"
+	return writer.declarations()+`\n${patch} .\n`
 }
 
 function quadsUseNamespace(quads, namespace)
