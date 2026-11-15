@@ -1,6 +1,6 @@
 {
   "name": "@muze-labs/oldm-shape",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Small assert-style object shapes for validating JavaScript objects and mapping them to OLDM linked data objects.",
   "type": "module",
   "main": "src/oldm-shape.mjs",
