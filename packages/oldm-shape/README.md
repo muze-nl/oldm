@@ -397,12 +397,17 @@ Use these wrappers from `@muze-labs/oldm-shape` around mapped fields. Validators
 
 - validates the JavaScript object first
 - writes only fields declared by the shape
-- writes the shape target to `a` when one is defined
+- ensures the shape target is present in `a`, preserving existing RDF types
 - creates a named subject when an `id()` field is present
 - creates a blank node when no `id()` field is present
 - treats unknown JavaScript fields as an error by default
 - does not fetch linked resources
 - does not infer predicates from JavaScript property names
+
+Ordinary mapped updates preserve additional RDF types, including on repeated
+updates. To deliberately replace the type set, use the graph's explicit
+`graph.set(subject, 'a', types)` operation; use `graph.delete(subject, 'a', type)`
+to remove a particular type.
 
 Options:
 

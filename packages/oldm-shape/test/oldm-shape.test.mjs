@@ -282,3 +282,35 @@ tap.test('Required preserves mapping metadata when wrapping field definitions', 
 	t.equal(subject.foaf$name, 'Auke')
 	t.end()
 })
+
+tap.test('mapped updates retain extra RDF types and unrelated values', t => {
+	const graph = graphFor()
+	const Person = shape('foaf$Person', {
+		id: id(uri()),
+		name: field('foaf$name', String)
+	})
+	const personId = 'https://example.org/profile#me'
+	const subject = graph.set(personId, 'a', ['foaf$Person', 'schema$Employee'])
+	graph.set(subject, 'schema$description', ['one', 'two'])
+	for (const name of ['First edit', 'Second edit']) {
+		const updated = Person.toOldm({id: personId, name}, graph)
+		t.equal(updated, subject, 'keeps the original subject')
+		t.same(updated.a, [
+			'http://xmlns.com/foaf/0.1/Person',
+			'http://schema.org/Employee'
+		], 'retains types without duplicates')
+		t.same(updated.schema$description.map(String), ['one', 'two'])
+		t.equal(String(updated.foaf$name), name)
+	}
+	t.end()
+})
+
+tap.test('mapping adds a missing declared type without replacing existing types', t => {
+	const graph = graphFor()
+	const Person = shape('foaf$Person', {id: id(uri()), name: field('foaf$name', String)})
+	const personId = 'https://example.org/profile#me'
+	graph.set(personId, 'a', 'schema$Employee')
+	const subject = Person.toOldm({id: personId, name: 'Alice'}, graph)
+	t.same(subject.a, ['http://schema.org/Employee', 'http://xmlns.com/foaf/0.1/Person'])
+	t.end()
+})

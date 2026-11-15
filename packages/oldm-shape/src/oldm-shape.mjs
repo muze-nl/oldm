@@ -633,7 +633,7 @@ function toOldm(info, data, graph, options={}, idEntry)
 	const subject = createSubject(info, data, graph, idEntry)
 
 	if (info.for) {
-		graph.set(subject, 'a', info.for)
+		graph.add(subject, 'a', info.for)
 	}
 
 	for (const [key, pattern] of Object.entries(info.fields)) {
