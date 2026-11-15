@@ -496,8 +496,10 @@ export const turtleWriter = async (source) => {
 class TurtleWriter {
 	#source
 	#prefixes
+	#usedPrefixes = new Set()
 	#blankNode = 0
-	#blankNodeIds = new WeakMap()
+	#blankNodeIds = new Map()
+	#referenceCounts = new WeakMap()
 
 	constructor(source) {
 		this.#source = source
@@ -505,13 +507,8 @@ class TurtleWriter {
 	}
 
 	write() {
-		const lines = [`@base <${absoluteIRI(this.#source.baseURI)}> .`]
-		for (const [prefix, iri] of this.#prefixes) {
-			lines.push(`@prefix ${prefix}: <${this.escapeIRI(iri)}> .`)
-		}
-		if (lines.length) {
-			lines.push('')
-		}
+		this.countAnonymousReferences()
+		const lines = []
 		for (const [id, subject] of Object.entries(this.#source.subjects)) {
 			const properties = this.getProperties(subject)
 			if (!properties.length) {
@@ -520,21 +517,68 @@ class TurtleWriter {
 			lines.push(`${this.resource(id)} ${this.propertyList(properties)} .`)
 			lines.push('')
 		}
-		return lines.join('\n').trim()+"\n"
+		// Labeled nodes are queued before their properties are written. A cycle
+		// therefore refers back to its label instead of expanding recursively.
+		for (const [subject, id] of this.#blankNodeIds) {
+			if (subject instanceof Collection) {
+				lines.push(...this.collectionStatements(subject, id))
+			}
+			else {
+				const properties = this.getProperties(subject)
+				if (properties.length) {
+					lines.push(`_:${id} ${this.propertyList(properties)} .`)
+				}
+			}
+		}
+		const declarations = [`@base <${absoluteIRI(this.#source.baseURI)}> .`]
+		for (const [prefix, iri] of this.#prefixes) {
+			if (this.#usedPrefixes.has(prefix)) {
+				declarations.push(`@prefix ${prefix}: <${this.escapeIRI(iri)}> .`)
+			}
+		}
+		return [...declarations, '', ...lines].join('\n').trim()+'\n'
+	}
+
+	countAnonymousReferences() {
+		const visited = new WeakSet()
+		const pending = Object.values(this.#source.subjects)
+			.flatMap(subject => Object.values(subject))
+		while (pending.length) {
+			const value = pending.pop()
+			if (value instanceof NamedNode) {
+				continue
+			}
+			if (value instanceof BlankNode || value instanceof Collection) {
+				const count = this.#referenceCounts.get(value) ?? 0
+				this.#referenceCounts.set(value, count+1)
+				if (visited.has(value)) {
+					continue
+				}
+				visited.add(value)
+				pending.push(...Object.values(value))
+			}
+			else if (Array.isArray(value)) {
+				pending.push(...value)
+			}
+		}
 	}
 
 	getProperties(subject) {
 		const properties = []
-		if (subject.a) {
+		if (subject.a && this.values(subject.a).length) {
 			properties.push(['a', this.values(subject.a).map(type => this.resource(this.#source.fullURI(type)))])
 		}
 		for (const [predicate, value] of Object.entries(subject)) {
 			if (predicate == 'id' || predicate == 'a') {
 				continue
 			}
+			const values = this.values(value)
+			if (!values.length) {
+				continue
+			}
 			properties.push([
 				this.resource(this.#source.fullURI(predicate)),
-				this.values(value).map(item => this.object(item))
+				values.map(item => this.object(item))
 			])
 		}
 		return properties
@@ -548,6 +592,9 @@ class TurtleWriter {
 
 	object(value) {
 		if (value instanceof Collection) {
+			if (value.length && this.#referenceCounts.get(value) > 1) {
+				return `_:${this.blankNodeID(value)}`
+			}
 			return `(${value.map(item => this.object(item)).join(' ')})`
 		}
 		if (value instanceof NamedNode) {
@@ -560,11 +607,29 @@ class TurtleWriter {
 	}
 
 	blankNode(value) {
+		if (this.#referenceCounts.get(value) > 1) {
+			return `_:${this.blankNodeID(value)}`
+		}
 		const properties = this.getProperties(value)
 		if (!properties.length) {
 			return `_:${this.blankNodeID(value)}`
 		}
 		return `[ ${this.propertyList(properties)} ]`
+	}
+
+	collectionStatements(collection, id) {
+		const lines = []
+		let subject = `_:${id}`
+		for (let index=0; index<collection.length; index++) {
+			const rest = index+1 < collection.length
+				? `_:b${++this.#blankNode}`
+				: this.resource(RDF_NIL)
+			const object = this.object(collection[index])
+			lines.push(`${subject} ${this.resource(RDF_FIRST)} ${object} ;`+
+				` ${this.resource(RDF_REST)} ${rest} .`)
+			subject = rest
+		}
+		return lines
 	}
 
 	literal(value) {
@@ -591,8 +656,12 @@ class TurtleWriter {
 	}
 
 	resource(id) {
-		return turtlePrefixedIRI(absoluteIRI(id), this.#prefixes)
-			?? `<${this.#source.relativeURI(id)}>`
+		const prefixed = turtlePrefixedIRI(absoluteIRI(id), this.#prefixes)
+		if (prefixed !== null) {
+			this.#usedPrefixes.add(prefixed.slice(0, prefixed.indexOf(':')))
+			return prefixed
+		}
+		return `<${this.#source.relativeURI(id)}>`
 	}
 
 	values(value) {
@@ -933,66 +1002,61 @@ function serializePatch(source, inserts, deletes, where=[])
 		...source.prefixDeclarations('source'),
 		solid: 'http://www.w3.org/ns/solid/terms#'
 	}
-	const lines = []
-	for (const [prefix, iri] of Object.entries(prefixes)) {
-		lines.push(`@prefix ${prefix}: <${escapeIRI(iri)}> .`)
-	}
-	if (lines.length) {
-		lines.push('')
-	}
+	const usedPrefixes = new Set(['solid'])
 
 	const predicates = []
 	if (where.length) {
-		predicates.push(`solid:where ${formula(source, where)}`)
+		predicates.push(`solid:where ${formula(source, where, usedPrefixes)}`)
 	}
 	if (deletes.length) {
-		predicates.push(`solid:deletes ${formula(source, deletes)}`)
+		predicates.push(`solid:deletes ${formula(source, deletes, usedPrefixes)}`)
 	}
 	if (inserts.length) {
-		predicates.push(`solid:inserts ${formula(source, inserts)}`)
+		predicates.push(`solid:inserts ${formula(source, inserts, usedPrefixes)}`)
 	}
 
 	let patch = `_:patch a solid:InsertDeletePatch`
 	if (predicates.length) {
 		patch += ';\n\t' + predicates.join(';\n\t')
 	}
-	lines.push(`${patch} .`)
-
-	return lines.join('\n')+'\n'
+	const lines = Object.entries(prefixes)
+		.filter(([prefix]) => usedPrefixes.has(prefix))
+		.map(([prefix, iri]) => `@prefix ${prefix}: <${escapeIRI(iri)}> .`)
+	return [...lines, '', `${patch} .`].join('\n')+'\n'
 }
 
-function formula(source, quads)
+function formula(source, quads, usedPrefixes)
 {
 	if (!quads.length) {
 		return '{}'
 	}
-	const lines = quads.map(quad => `\n\t\t${quadToString(source, quad)}`)
+	const lines = quads.map(quad => `\n\t\t${quadToString(source, quad, usedPrefixes)}`)
 	return `{${lines.join('')}\n\t}`
 }
 
-function quadToString(source, quad)
+function quadToString(source, quad, usedPrefixes)
 {
-	return `${termToString(source, quad.subject)} ${quad.predicate.id == rdfType ? 'a' : termToString(source, quad.predicate)} ${termToString(source, quad.object)} .`
+	return `${termToString(source, quad.subject, usedPrefixes)} ${quad.predicate.id == rdfType ? 'a' : termToString(source, quad.predicate, usedPrefixes)} ${termToString(source, quad.object, usedPrefixes)} .`
 }
 
-function termToString(source, term)
+function termToString(source, term, usedPrefixes)
 {
 	if (term.termType == 'Variable') {
 		return `?${term.id}`
 	}
 	if (term.termType == 'NamedNode') {
-		return resource(source, term.id)
+		return resource(source, term.id, usedPrefixes)
 	}
 	if (term.termType == 'BlankNode') {
 		return `_:${term.id}`
 	}
 	if (term.termType == 'Literal') {
-		return literalToString(source, term)
+		return literalToString(source, term, usedPrefixes)
 	}
 	throw new Error(`Cannot serialize unknown RDF term type: ${term.termType}`)
 }
 
-function literalToString(source, term)
+function literalToString(source, term, usedPrefixes)
 {
 	const quoted = `"${escapeString(String(term.value))}"`
 	if (term.language) {
@@ -1000,14 +1064,19 @@ function literalToString(source, term)
 	}
 	const datatype = term.datatype?.id
 	if (datatype && datatype != XSD+'string') {
-		return `${quoted}^^${resource(source, datatype)}`
+		return `${quoted}^^${resource(source, datatype, usedPrefixes)}`
 	}
 	return quoted
 }
 
-function resource(source, id)
+function resource(source, id, usedPrefixes)
 {
-	return turtlePrefixedIRI(absoluteIRI(id), source.prefixEntries('source')) ?? `<${id}>`
+	const prefixed = turtlePrefixedIRI(absoluteIRI(id), source.prefixEntries('source'))
+	if (prefixed !== null) {
+		usedPrefixes.add(prefixed.slice(0, prefixed.indexOf(':')))
+		return prefixed
+	}
+	return `<${id}>`
 }
 
 function escapeIRI(value)

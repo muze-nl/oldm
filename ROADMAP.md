@@ -533,3 +533,28 @@ This should be user-facing documentation, not just an internal alignment note.
 12. Document the full object ↔ RDF mapping contract.
 
 The first five items complete the new multi-graph editing workflow. The remaining items improve reliability, browser confidence, and long-term Muze alignment.
+
+## Resolved: deduplicate equivalent numeric literals after Turtle reload
+
+Reported by margin-notes on 2026-10-30; reproduced with published OLDM 0.8.1.
+Adding both `literal(9, { type: xsdInteger })` and
+`literal('9', { type: xsdInteger })` to the same subject/predicate produces
+`9, 9` in Turtle. The same occurs when merging an in-memory Cobalt fragment
+with its Turtle-parsed copy, duplicating start/end/order values.
+
+`normalizeStringLiteral()` supplies `language: ''` to the lexical string
+representation, while the numeric wrapper retains `language: undefined`.
+`sameValue()` compares those language properties directly, so the otherwise
+equivalent literals fail duplicate detection.
+
+- Normalize absent and empty language tags consistently in literal comparison.
+- Cover numeric/lexical typed literals in both insertion orders, Turtle
+  round-trip merging, and deletion matching.
+- Keep genuinely different datatypes, language tags and lexical forms distinct.
+- Review Solid Workspace's literal comparison keys for the same representation
+  mismatch; do not work around this in the margin-notes RDF bridge.
+
+Implemented in oldm-core: literal equality normalizes absent/empty language
+metadata. Tests cover both insertion orders, deletion, distinct datatypes and
+lexical forms, and repeated Turtle reimport. Solid Workspace normalizes typed
+literal tie keys as well. Prepared release: oldm-core and oldm 0.8.2.

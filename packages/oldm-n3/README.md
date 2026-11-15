@@ -26,3 +26,11 @@ const context = oldm({
 ## License
 
 MIT.
+
+## Prefix declarations
+
+Writers emit only prefixes actually used in the serialized RDF. This includes
+nested values and literal datatypes, and also applies to Solid patches. Text
+that happens to contain `prefix:words` does not require a declaration. Unused
+source and context prefixes remain available for later edits; serialization
+does not modify the graph or its prefix configuration.

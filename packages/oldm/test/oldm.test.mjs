@@ -98,3 +98,16 @@ tap.test('friendly context allows explicit parser and writer overrides', async t
 
 	t.end()
 })
+
+tap.test('numeric triples remain singular when reimporting their Turtle representation', async t => {
+  const source = oldm.context().parse('', url, 'text/turtle')
+  source.set(url, 'schema$position', oldm.literal(9, {
+    type: 'http://www.w3.org/2001/XMLSchema#integer'
+  }))
+  for (let i = 0; i < 3; i++) {
+    const parsed = oldm.context().parse(await source.write(), url, 'text/turtle')
+    source.add(url, 'schema$position', parsed.get(url).schema$position)
+  }
+  t.equal(oldm.many(source.get(url).schema$position).length, 1)
+  t.notMatch(await source.write(), /9, 9/)
+})
