@@ -81,6 +81,45 @@ tap.test('parses comments, relative IRIs, blank node labels, booleans and number
 	t.end()
 })
 
+tap.test('keeps adjacent statement dots separate from numeric literals', async t => {
+	const cases = [
+		['1234', 'integer'],
+		['+1234', 'integer'],
+		['-1234', 'integer'],
+		['0', 'integer'],
+		['12.5', 'decimal'],
+		['.5', 'decimal'],
+		['-.5', 'decimal'],
+		['1e2', 'double'],
+		['1.e2', 'double'],
+		['1.5E-2', 'double'],
+		['+.5e+2', 'double']
+	]
+
+	for (const [value, datatype] of cases) {
+		await t.test(`${value}. at end of document`, t => {
+			const source = parse(`@prefix schema: <http://schema.org/>.
+<#me> schema:value ${value}.`)
+			t.equal(String(source.primary.schema$value), value)
+			t.equal(source.primary.schema$value.type,
+				'http://www.w3.org/2001/XMLSchema#' + datatype)
+			t.end()
+		})
+	}
+})
+
+tap.test('parses the next statement after an integer and adjacent dot', t => {
+	const source = parse(`@prefix schema: <http://schema.org/>.
+<#me> schema:value 1234.# statement-ending dot, not a decimal point
+<#me> schema:name "After the integer".`)
+
+	t.equal(String(source.primary.schema$value), '1234')
+	t.equal(source.primary.schema$value.type,
+		'http://www.w3.org/2001/XMLSchema#integer')
+	t.equal(String(source.primary.schema$name), 'After the integer')
+	t.end()
+})
+
 tap.test('writes Turtle that OLDM can parse back with the same public shape', async t => {
 	const context = createContext()
 	const source = context.parse(`
