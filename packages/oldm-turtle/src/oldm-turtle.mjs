@@ -257,7 +257,13 @@ class TurtleParser {
 
 	parseNumericLiteral() {
 		const rest = this.#input.slice(this.#position)
-		const match = rest.match(/^[+-]?(?:(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+|[0-9]+)/)
+		// Turtle 1.1 numeric grammar: a decimal needs fractional digits.
+		// Match doubles first so 1.e2 stays valid, but 1234. ends an integer.
+		// https://www.w3.org/TR/turtle/#grammar-production-NumericLiteral
+		const double = /^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+/
+		const decimal = /^[+-]?[0-9]*\.[0-9]+/
+		const integer = /^[+-]?[0-9]+/
+		const match = rest.match(double) || rest.match(decimal) || rest.match(integer)
 		if (!match) {
 			this.error('Expected object')
 		}
