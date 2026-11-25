@@ -50,7 +50,10 @@ Prefer `literal()` for new code. Deletion matching is unchanged by this helper.
 
 Only property names are shortened. Class values (`subject.a`) and literal
 datatypes (`value.type`, when present) are full IRIs in both source graphs and
-combined context views. Linked objects retain their full IRI in `.id`.
+combined context views. A quoted `rdf:type` object is an RDF literal even
+when its text spells a class IRI. OLDM keeps it as a boxed literal in
+`subject.a`; use `oldm.literal(iri)` to supply that literal to write helpers.
+Linked objects retain their full IRI in `.id`.
 
 Property names in source graphs prefer source prefixes. Combined context views
 prefer client-provided prefixes, then OLDM defaults, then source prefixes.

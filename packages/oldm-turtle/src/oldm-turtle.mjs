@@ -3,6 +3,7 @@ import {rdfType, NamedNode, BlankNode, Collection} from '@muze-nl/oldm-core'
 
 const RDF_FIRST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first'
 const RDF_REST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'
+const RDF_LANG_STRING = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString'
 const RDF_NIL = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'
 const XSD = 'http://www.w3.org/2001/XMLSchema#'
 
@@ -245,7 +246,7 @@ class TurtleParser {
 		this.skip()
 		if (this.peek() == '@') {
 			this.#position++
-			return literal(value, XSD+'string', this.readLanguageTag())
+			return literal(value, RDF_LANG_STRING, this.readLanguageTag())
 		}
 		if (this.consume('^^')) {
 			this.skip()
@@ -572,7 +573,10 @@ class TurtleWriter {
 	getProperties(subject) {
 		const properties = []
 		if (subject.a && this.values(subject.a).length) {
-			properties.push(['a', this.values(subject.a).map(type => this.resource(this.#source.fullURI(type)))])
+			const types = this.values(subject.a).map(type => (typeof type == 'string' || type?.id)
+				? this.resource(this.#source.fullURI(type))
+				: this.object(type))
+			properties.push(['a', types])
 		}
 		for (const [predicate, value] of Object.entries(subject)) {
 			if (predicate == 'id' || predicate == 'a') {

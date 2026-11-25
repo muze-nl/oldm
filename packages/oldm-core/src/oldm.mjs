@@ -116,12 +116,12 @@ function values(value)
 	return [value]
 }
 
-function mergeValue(existing, value, graph=null)
+function mergeValue(existing, value, graph, property)
 {
 	const result = values(existing)
 	for (const item of values(value)) {
-		const comparable = normalizeStringLiteral(item, graph)
-		if (!result.some(existingItem => sameValue(normalizeStringLiteral(existingItem, graph), comparable))) {
+		const comparable = comparisonValue(item, graph, property)
+		if (!result.some(existingItem => sameValue(comparisonValue(existingItem, graph, property), comparable))) {
 			result.push(item)
 		}
 	}
@@ -160,8 +160,12 @@ function sameValue(left, right)
 	return false
 }
 
-function normalizeStringLiteral(value, graph)
+function comparisonValue(value, graph, property)
 {
+	// A primitive string in .a is a class IRI. Only boxed strings are literals here.
+	if (property == 'a' && typeof value == 'string') {
+		return value
+	}
 	if (!graph || (typeof value != 'string' && !(value instanceof String))) {
 		return value
 	}
@@ -453,7 +457,9 @@ export class Context {
 
 		if (property == 'a' && subject.graph instanceof Graph) {
 			const graph = subject.graph
-			value = graph.fullURI(value?.id ?? value, null, 'context')
+			value = graph.normalizeTypeValue(value, 'context')
+			const comparable = comparisonValue(value, graph, 'a')
+			return values(subject.a).some(item => sameValue(comparisonValue(item, graph, 'a'), comparable))
 		}
 
 		return values(subject[property]).some(item => sameSourceValue(item, value))
@@ -525,7 +531,8 @@ export class Context {
 				: this.propertyName(source.graph.fullURI(predicate, null, 'source'))
 			target[contextPredicate] = mergeValue(
 				target[contextPredicate],
-				resolveValue(value, subjects, this)
+				resolveValue(value, subjects, this),
+				contextPredicate == 'a' ? source.graph : null, contextPredicate
 			)
 		}
 	}
@@ -816,7 +823,7 @@ export class Graph
 			? this.normalizeTypeValues(value, preference)
 			: this.normalizeValues(value, preference)
 
-		node[property] = mergeValue(node[property], newValue, this)
+		node[property] = mergeValue(node[property], newValue, this, property)
 		return node
 	}
 
@@ -852,9 +859,9 @@ export class Graph
 		const deleteValues = (property == 'a'
 			? values(this.normalizeTypeValues(value, preference))
 			: values(this.normalizeValues(value, preference)))
-			.map(item => normalizeStringLiteral(item, this))
+			.map(item => comparisonValue(item, this, property))
 		const remaining = values(node[property])
-			.filter(item => !deleteValues.some(deleteValue => sameValue(normalizeStringLiteral(item, this), deleteValue)))
+			.filter(item => !deleteValues.some(deleteValue => sameValue(comparisonValue(item, this, property), deleteValue)))
 
 		if (remaining.length == values(node[property]).length) {
 			return false
@@ -943,6 +950,13 @@ export class Graph
 
 	normalizeTypeValue(value, preference='source')
 	{
+		if (value instanceof Collection && value.graph === this) {
+			return value
+		}
+		if (value instanceof String || value instanceof Number || value instanceof Collection
+			|| (value instanceof BlankNode && !(value instanceof NamedNode))) {
+			return this.normalizeValue(value, preference)
+		}
 		return this.fullURI(value, null, preference)
 	}
 
@@ -1044,7 +1058,8 @@ export class BlankNode
 			predicate = predicate.id
 		}
 		if (predicate==rdfType) {
-			this.addType(object.id)
+			const type = object.termType == 'NamedNode' ? object.id : this.graph.getValue(object)
+			this.addType(object.termType == 'Literal' && typeof type == 'string' ? literal(type) : type)
 		} else {
 			const value = this.graph.getValue(object)
 			predicate = this.graph.propertyName(predicate)
@@ -1059,17 +1074,15 @@ export class BlankNode
 	}
 
 	/**
-	 * Adds a rdfType value, stored in this.a
-	 * Subjects can have more than one type (or class), unlike literals
-	 * The type value can be any URI, xsdTypes are unexpected here
+	 * Class IRIs use strings; other rdf:type objects keep their RDF term kind.
 	 */
 	addType(type)
 	{
-		type = this.graph.fullURI(type)
-		if (!this.a) {
+		type = this.graph.normalizeTypeValue(type)
+		if (this.a === undefined) {
 			this.a = type
 		} else {
-			if (!Array.isArray(this.a)) {
+			if (!Array.isArray(this.a) || this.a instanceof Collection) {
 				this.a = [ this.a ]
 			}
 			this.a.push(type)

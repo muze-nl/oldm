@@ -336,3 +336,23 @@ tap.test('patch declarations cover only its changed triples and patch vocabulary
   t.match(patch, '"Before"')
   t.match(patch, '"After"')
 })
+
+tap.test('profile email types round-trip as distinct RDF terms', async t => {
+	const text = `@prefix v: <http://www.w3.org/2006/vcard/ns#>.
+		<#me> v:hasEmail ([ a "urn:Personal", <urn:Personal>, "prive"@nl, "12"^^<urn:code> ]) ;
+			<http://www.w3.org/ns/solid/terms#oidcIssuer> <https://issuer.example/>.`
+	const source = parse(text)
+	t.equal(source.primary.solid$oidcIssuer.id, 'https://issuer.example/')
+	const quads = turtleParser(await source.write(), url, 'text/turtle').quads
+	const types = quads.filter(q => q.predicate.id == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
+	const terms = types.map(({object}) => object.termType == 'NamedNode'
+		? ['iri', object.id]
+		: ['literal', object.value, object.language || '', object.datatype.id])
+	t.same(terms, [
+		['literal', 'urn:Personal', '', 'http://www.w3.org/2001/XMLSchema#string'],
+		['iri', 'urn:Personal'],
+		['literal', 'prive', 'nl', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString'],
+		['literal', '12', '', 'urn:code']
+	])
+	t.notMatch(await source.patch(), /solid:(inserts|deletes)/)
+})
