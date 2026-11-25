@@ -2237,11 +2237,11 @@
     }
     return [value];
   }
-  function mergeValue(existing, value, graph = null) {
+  function mergeValue(existing, value, graph, property) {
     const result = values(existing);
     for (const item of values(value)) {
-      const comparable = normalizeStringLiteral(item, graph);
-      if (!result.some((existingItem) => sameValue(normalizeStringLiteral(existingItem, graph), comparable))) {
+      const comparable = comparisonValue(item, graph, property);
+      if (!result.some((existingItem) => sameValue(comparisonValue(existingItem, graph, property), comparable))) {
         result.push(item);
       }
     }
@@ -2274,7 +2274,10 @@
     }
     return false;
   }
-  function normalizeStringLiteral(value, graph) {
+  function comparisonValue(value, graph, property) {
+    if (property == "a" && typeof value == "string") {
+      return value;
+    }
     if (!graph || typeof value != "string" && !(value instanceof String)) {
       return value;
     }
@@ -2501,7 +2504,9 @@
       }
       if (property == "a" && subject.graph instanceof Graph) {
         const graph = subject.graph;
-        value = graph.fullURI(value?.id ?? value, null, "context");
+        value = graph.normalizeTypeValue(value, "context");
+        const comparable = comparisonValue(value, graph, "a");
+        return values(subject.a).some((item) => sameValue(comparisonValue(item, graph, "a"), comparable));
       }
       return values(subject[property]).some((item) => sameSourceValue(item, value));
     }
@@ -2556,7 +2561,9 @@
         const contextPredicate = predicate == "a" ? "a" : this.propertyName(source.graph.fullURI(predicate, null, "source"));
         target[contextPredicate] = mergeValue(
           target[contextPredicate],
-          resolveValue(value, subjects, this)
+          resolveValue(value, subjects, this),
+          contextPredicate == "a" ? source.graph : null,
+          contextPredicate
         );
       }
     }
@@ -2790,7 +2797,7 @@
       const node = this.ensureSubject(subject, preference);
       const property = this.propertyName(predicate, preference);
       const newValue = property == "a" ? this.normalizeTypeValues(value, preference) : this.normalizeValues(value, preference);
-      node[property] = mergeValue(node[property], newValue, this);
+      node[property] = mergeValue(node[property], newValue, this, property);
       return node;
     }
     delete(subject, predicate = null, value = void 0, options = {}) {
@@ -2817,8 +2824,8 @@
         delete node[property];
         return true;
       }
-      const deleteValues = (property == "a" ? values(this.normalizeTypeValues(value, preference)) : values(this.normalizeValues(value, preference))).map((item) => normalizeStringLiteral(item, this));
-      const remaining = values(node[property]).filter((item) => !deleteValues.some((deleteValue) => sameValue(normalizeStringLiteral(item, this), deleteValue)));
+      const deleteValues = (property == "a" ? values(this.normalizeTypeValues(value, preference)) : values(this.normalizeValues(value, preference))).map((item) => comparisonValue(item, this, property));
+      const remaining = values(node[property]).filter((item) => !deleteValues.some((deleteValue) => sameValue(comparisonValue(item, this, property), deleteValue)));
       if (remaining.length == values(node[property]).length) {
         return false;
       }
@@ -2891,6 +2898,12 @@
       return this.normalizeTypeValue(value, preference);
     }
     normalizeTypeValue(value, preference = "source") {
+      if (value instanceof Collection && value.graph === this) {
+        return value;
+      }
+      if (value instanceof String || value instanceof Number || value instanceof Collection || value instanceof BlankNode && !(value instanceof NamedNode)) {
+        return this.normalizeValue(value, preference);
+      }
       return this.fullURI(value, null, preference);
     }
     looksLikeURI(value, preference = "source") {
@@ -2968,7 +2981,8 @@
         predicate = predicate.id;
       }
       if (predicate == rdfType) {
-        this.addType(object.id);
+        const type = object.termType == "NamedNode" ? object.id : this.graph.getValue(object);
+        this.addType(object.termType == "Literal" && typeof type == "string" ? literal(type) : type);
       } else {
         const value = this.graph.getValue(object);
         predicate = this.graph.propertyName(predicate);
@@ -2982,16 +2996,14 @@
       }
     }
     /**
-     * Adds a rdfType value, stored in this.a
-     * Subjects can have more than one type (or class), unlike literals
-     * The type value can be any URI, xsdTypes are unexpected here
+     * Class IRIs use strings; other rdf:type objects keep their RDF term kind.
      */
     addType(type) {
-      type = this.graph.fullURI(type);
-      if (!this.a) {
+      type = this.graph.normalizeTypeValue(type);
+      if (this.a === void 0) {
         this.a = type;
       } else {
-        if (!Array.isArray(this.a)) {
+        if (!Array.isArray(this.a) || this.a instanceof Collection) {
           this.a = [this.a];
         }
         this.a.push(type);
@@ -5254,13 +5266,13 @@
         if (!classNames) {
           return predicates;
         }
-        if (!Array.isArray(classNames)) {
+        if (!Array.isArray(classNames) || classNames instanceof Collection) {
           classNames = [classNames];
         }
         for (const name of classNames) {
           predicates.push({
             predicate: namedNode2(rdfType),
-            object: namedNode2(source.fullURI(name))
+            object: typeof name == "string" || name?.id ? namedNode2(source.fullURI(name)) : getObject(name)
           });
         }
         return predicates;
@@ -5295,19 +5307,7 @@
           let pred = {
             predicate: namedNode2(fullPred)
           };
-          if (object2 instanceof Collection) {
-            pred.object = getCollection(object2);
-          } else if (Array.isArray(object2)) {
-            pred.object = getArray(object2);
-          } else if (object2 instanceof NamedNode) {
-            pred.object = namedNode2(object2.id);
-          } else if (object2 instanceof BlankNode) {
-            pred.object = getBlankNode(object2);
-          } else if (isLiteral2(object2)) {
-            pred.object = getLiteral(object2);
-          } else {
-            console.log("oldm-ns: encountered unknown object", object2, predicate);
-          }
+          pred.object = Array.isArray(object2) && !(object2 instanceof Collection) ? object2.map(getObject) : getObject(object2);
           preds.push(pred);
         });
         return preds;
@@ -5356,20 +5356,20 @@
         }
         return blankNodes.get(object);
       };
-      const getArray = (object) => {
-        let list = [];
-        for (const o of object) {
-          if (isLiteral2(o)) {
-            list.push(getLiteral(o));
-          } else if (o instanceof NamedNode) {
-            list.push(namedNode2(o.id));
-          } else if (o instanceof BlankNode) {
-            list.push(getBlankNode(o));
-          } else if (o instanceof Collection) {
-            list.push(getCollection(o));
-          }
+      const getObject = (value) => {
+        if (value instanceof NamedNode) {
+          return namedNode2(value.id);
         }
-        return list;
+        if (value instanceof BlankNode) {
+          return getBlankNode(value);
+        }
+        if (value instanceof Collection) {
+          return getCollection(value);
+        }
+        if (isLiteral2(value)) {
+          return getLiteral(value);
+        }
+        throw new TypeError("oldm-n3: Cannot write an unsupported RDF object");
       };
       Object.entries(source.subjects).forEach(([id, subject]) => {
         writeProperties(namedNode2(id), subject);
