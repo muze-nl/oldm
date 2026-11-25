@@ -314,3 +314,13 @@ tap.test('mapping adds a missing declared type without replacing existing types'
 	t.same(subject.a, ['http://schema.org/Employee', 'http://xmlns.com/foaf/0.1/Person'])
 	t.end()
 })
+
+tap.test('a quoted class IRI does not satisfy a required shape type', t => {
+	const graph = graphFor()
+	const subject = Contact.toOldm(contact, graph)
+	graph.set(subject, 'a', new String(graph.fullURI('vcard$Individual')))
+	t.throws(() => Contact.fromOldm(subject), /shape conversion failed/)
+	graph.add(subject, 'a', 'vcard$Individual')
+	t.equal(Contact.fromOldm(subject).name, contact.name)
+	t.end()
+})

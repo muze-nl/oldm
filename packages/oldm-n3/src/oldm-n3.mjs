@@ -69,13 +69,15 @@ export const n3Writer = (source) => {
 			if (!classNames) {
 				return predicates
 			}
-			if (!Array.isArray(classNames)) {
+			if (!Array.isArray(classNames) || classNames instanceof Collection) {
 				classNames = [ classNames ]
 			}
 			for (const name of classNames) {
 				predicates.push({
 					predicate: namedNode(rdfType),
-					object: namedNode(source.fullURI(name))
+					object: typeof name == 'string' || name?.id
+						? namedNode(source.fullURI(name))
+						: getObject(name)
 				})
 			}
 			return predicates
@@ -112,19 +114,9 @@ export const n3Writer = (source) => {
 				let pred = {
 					predicate: namedNode(fullPred)
 				}
-				if (object instanceof Collection) {
-					pred.object = getCollection(object)
-				} else if (Array.isArray(object)) {
-					pred.object = getArray(object)
-				} else if (object instanceof NamedNode) {
-					pred.object = namedNode(object.id)
-				} else if (object instanceof BlankNode) {
-					pred.object = getBlankNode(object)
-				} else if (isLiteral(object)) {
-					pred.object = getLiteral(object)
-				} else {
-					console.log('oldm-ns: encountered unknown object', object, predicate)
-				}
+				pred.object = Array.isArray(object) && !(object instanceof Collection)
+					? object.map(getObject)
+					: getObject(object)
 				preds.push(pred)
 			})
 			return preds
@@ -188,25 +180,20 @@ export const n3Writer = (source) => {
 			return blankNodes.get(object)
 		}
 
-		const getArray = (object) => {
-			// array is a list of objects
-			// either object.id (named node)
-			// literal
-			// blank
-			// or list
-			let list = []
-			for (const o of object) {
-				if (isLiteral(o)) {
-					list.push(getLiteral(o))
-				} else if (o instanceof NamedNode) {
-					list.push(namedNode(o.id))
-				} else if (o instanceof BlankNode) {
-					list.push(getBlankNode(o))
-				} else if (o instanceof Collection) {
-					list.push(getCollection(o))
-				}
+		const getObject = (value) => {
+			if (value instanceof NamedNode) {
+				return namedNode(value.id)
 			}
-			return list
+			if (value instanceof BlankNode) {
+				return getBlankNode(value)
+			}
+			if (value instanceof Collection) {
+				return getCollection(value)
+			}
+			if (isLiteral(value)) {
+				return getLiteral(value)
+			}
+			throw new TypeError('oldm-n3: Cannot write an unsupported RDF object')
 		}
 
 		Object.entries(source.subjects).forEach(([id,subject]) => {
